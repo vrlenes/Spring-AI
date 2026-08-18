@@ -28,10 +28,10 @@ export function ChatComposer({ disabled, onSend }: ChatComposerProps) {
   }
 
   return (
-    <form onSubmit={gonder} className="border-t bg-background/80 p-3 backdrop-blur">
+    <form onSubmit={gonder} className="shrink-0 border-t p-3">
       <div
         className={cn(
-          'mx-auto flex max-w-3xl items-center gap-1.5 rounded-full border bg-muted/40 py-1.5 pr-1.5 pl-4 shadow-sm transition-colors',
+          'flex items-center gap-1.5 rounded-full border bg-muted/40 py-1.5 pr-1.5 pl-4 transition-colors',
           'focus-within:border-foreground/15 focus-within:bg-background',
         )}
       >
