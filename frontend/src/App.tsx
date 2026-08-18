@@ -37,6 +37,12 @@ function App() {
           conversationIdRef.current = olay.conversationId
           return
         }
+        if (olay.type === 'kaynaklar') {
+          setMesajlar((onceki) =>
+            onceki.map((m) => (m.id === asistanId ? { ...m, kaynaklar: olay.kaynaklar } : m)),
+          )
+          return
+        }
         setMesajlar((onceki) =>
           onceki.map((m) => (m.id === asistanId ? { ...m, content: m.content + olay.text } : m)),
         )

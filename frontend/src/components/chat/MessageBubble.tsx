@@ -1,8 +1,32 @@
-import { User } from 'lucide-react'
+import { FileText, User } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import karatayMark from '@/assets/karatay-mark.png'
 import { cn } from '@/lib/utils'
-import type { ChatMessage } from '@/types/chat'
+import type { ChatMessage, Kaynak } from '@/types/chat'
+
+function KaynakKartlari({ kaynaklar }: { kaynaklar: Kaynak[] }) {
+  return (
+    <div className="mt-2.5 flex flex-col gap-1">
+      <p className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+        <FileText className="size-3" /> Kaynaklar
+      </p>
+      {kaynaklar.map((kaynak, i) => (
+        <div
+          key={`${kaynak.baslik}-${kaynak.parcaNo}-${i}`}
+          className="flex items-center gap-2 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-[12px]"
+        >
+          <span className="min-w-0 flex-1 truncate text-foreground">{kaynak.baslik}</span>
+          <span className="shrink-0 text-muted-foreground">Parça {kaynak.parcaNo}</span>
+          {kaynak.benzerlik != null && (
+            <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[10.5px] text-primary">
+              {Math.round(kaynak.benzerlik * 100)}%
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 interface MessageBubbleProps {
   message: ChatMessage
@@ -58,6 +82,9 @@ export function MessageBubble({ message, streaming }: MessageBubbleProps) {
           </ReactMarkdown>
           {streaming && (
             <span className="ml-0.5 inline-block h-3.5 w-0.5 translate-y-0.5 animate-pulse rounded-full bg-foreground/70" />
+          )}
+          {message.kaynaklar && message.kaynaklar.length > 0 && (
+            <KaynakKartlari kaynaklar={message.kaynaklar} />
           )}
         </div>
       )}

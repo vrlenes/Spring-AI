@@ -53,6 +53,12 @@ export async function streamChat(
         onEvent({ type: 'conversationId', conversationId: veri })
       } else if (olayAdi === 'token') {
         onEvent({ type: 'token', text: veri })
+      } else if (olayAdi === 'kaynaklar') {
+        try {
+          onEvent({ type: 'kaynaklar', kaynaklar: JSON.parse(veri) })
+        } catch {
+          // sunucudan bozuk JSON gelirse kaynaklari sessizce yok say
+        }
       }
     }
   }
