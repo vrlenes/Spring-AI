@@ -22,6 +22,21 @@ tr.gov.karatay.asistan
 └── common/          # GlobalExceptionHandler, enums (TalepDurumu, TalepOnceligi)
 ```
 
+## Frontend
+
+`frontend/` — React + Vite + TypeScript + Tailwind + shadcn/ui. Proje dokümanı Thymeleaf
+öngörüyordu, mentör önerisiyle (daha zengin bir arayüz için) React'e geçildi — bu
+dokümandan bilinçli bir sapma. `npm run build` çıktısı doğrudan
+`src/main/resources/static`'e yazılır (`vite.config.ts`), Spring Boot bunu tek süreçte
+API'yle birlikte sunar; ayrı deploy/CORS yok. `npm run dev` sırasında `/api/*` istekleri
+aynı config'teki proxy ile `localhost:8080`'e yönlendirilir.
+
+- `src/lib/chatStream.ts` — `/api/chat/stream` SSE gövdesini fetch + ReadableStream ile
+  elle ayrıştırır (native `EventSource` POST desteklemediği için).
+- `src/components/chat/` — sunum bileşenleri, iş mantığı içermez.
+- `src/components/ui/` — shadcn/ui'nin ürettiği temel bileşenler; sadece gerçekten
+  kullanılanlar tutulur, kullanılmayan bileşen eklenmez.
+
 ## Mimari kuralları (zorunlu)
 
 - **`*Tools` sınıfları iş mantığı içermez.** `@Tool` anotasyonlu metotlar sadece ilgili
@@ -45,6 +60,7 @@ tr.gov.karatay.asistan
 
 ```powershell
 docker compose up -d
+cd frontend && npm run build && cd ..   # backend'in sunacagi statigi uretir
 .\mvnw.cmd spring-boot:run
 .\mvnw.cmd test
 ```
