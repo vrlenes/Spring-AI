@@ -1,6 +1,7 @@
 import { ClipboardList, FileText, Plus } from 'lucide-react'
 import karatayLogo from '@/assets/karatay-logo.png'
 import { Button } from '@/components/ui/button'
+import { DokumanPanel } from '@/components/chat/DokumanPanel'
 
 interface SidebarProps {
   onYeniKonusma: () => void
@@ -24,7 +25,7 @@ export function Sidebar({ onYeniKonusma }: SidebarProps) {
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-2">
+      <div className="px-4 py-2">
         <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
           Neler yapabilirim?
         </p>
@@ -40,8 +41,12 @@ export function Sidebar({ onYeniKonusma }: SidebarProps) {
         </ul>
       </div>
 
+      <div className="my-1 border-t" />
+
+      <DokumanPanel />
+
       <div className="border-t px-4 py-3 text-[11px] text-muted-foreground">
-        Faz 1 — düz sohbet + hafıza
+        Faz 2 — RAG (mevzuat soru-cevap)
       </div>
     </aside>
   )
