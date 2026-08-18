@@ -9,6 +9,7 @@ Detaylı proje spesifikasyonu için `claude_dosya/belediye-ai-asistan-proje-doku
 ## Teknoloji
 
 - Java 21, Spring Boot 3.5.x, Spring AI 1.1.x
+- Model sağlayıcı: **Ollama** (yerel, ücretsiz) — chat: `qwen3:8b`, embedding: `bge-m3`
 - PostgreSQL 16 + pgvector, Flyway, Spring Data JPA
 - Frontend: React + Vite + TypeScript + Tailwind + shadcn/ui (`frontend/`), derlenip
   `src/main/resources/static`'e gömülür — proje dokümanındaki Thymeleaf planından
@@ -20,9 +21,13 @@ Detaylı proje spesifikasyonu için `claude_dosya/belediye-ai-asistan-proje-doku
 - JDK 21+
 - Node.js 20+ ve npm (frontend için)
 - Docker Desktop (Windows'ta çalışır durumda olmalı)
-- Bir chat API anahtarı (Faz 1'den itibaren gerekli; Faz 0'da gerekmez). Geliştirmede
-  varsayılan olarak ücretsiz katmanı olan **Groq** kullanılıyor (kredi kartı gerekmiyor):
-  https://console.groq.com/keys adresinden anahtar alın.
+- [Ollama](https://ollama.com/download) — model sağlayıcı olarak kullanılıyor (Faz 1'den
+  itibaren gerekli; Faz 0'da gerekmez). Tamamen yerel ve ücretsiz, veri dışarı çıkmaz.
+  Kurulumdan sonra:
+  ```powershell
+  ollama pull qwen3:8b
+  ollama pull bge-m3
+  ```
 
 ## Kurulum (Windows / PowerShell)
 
@@ -30,8 +35,9 @@ Detaylı proje spesifikasyonu için `claude_dosya/belediye-ai-asistan-proje-doku
 
    ```powershell
    Copy-Item .env.example .env
-   # .env dosyasını açıp OPENAI_API_KEY değerini girin (Faz 1'den itibaren, Groq anahtarı)
    ```
+
+   Varsayılanlar zaten Ollama'ya göre ayarlı, değiştirmeniz gerekmez.
 
 2. Veritabanını ayağa kaldırın:
 
@@ -108,4 +114,5 @@ Bkz. `CLAUDE.md`.
 - [ ] Faz 2 — RAG
 - [ ] Faz 3 — Tool calling
 - [ ] Faz 4 — İyileştirme
-- [ ] Faz 5 — Ollama geçişi (opsiyonel)
+- [x] Faz 5 — Ollama geçişi (planlanandan erken yapıldı — hem chat hem embedding
+      baştan itibaren Ollama üzerinden çalışıyor, KVKK açısından güvenli ve ücretsiz)

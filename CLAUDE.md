@@ -44,10 +44,12 @@ aynı config'teki proxy ile `localhost:8080`'e yönlendirilir.
   bağımsız test edilebilmesini ve aynı mantığın hem chat'ten hem REST API'den
   kullanılabilmesini sağlar.
 - **Sağlayıcıya özel sınıf import etme.** Sadece Spring AI'ın `ChatClient`, `ChatModel`,
-  `EmbeddingModel` arayüzleri kullanılır — `OpenAiChatModel` gibi somut sınıflar asla
-  doğrudan kullanılmaz. Sebep: model sağlayıcısı (OpenAI → Ollama) ileride sadece config
-  değişikliğiyle değişebilmeli (KVKK gereği yerel modele geçiş planı var, bkz. Faz 5).
-  application.yml içindeki `spring.ai.openai.*` ayarları istisna — o config, kod değil.
+  `EmbeddingModel` arayüzleri kullanılır — `OllamaChatModel` gibi somut sınıflar asla
+  doğrudan kullanılmaz. Sebep: model sağlayıcısı ileride sadece config değişikliğiyle
+  değişebilmeli. Proje Faz 5'i (Ollama'ya geçiş) planlanandan erken, baştan itibaren
+  uyguluyor — hem chat hem embedding Ollama üzerinden, tamamen yerel ve ücretsiz, KVKK
+  açısından güvenli. `application.yml` içindeki `spring.ai.ollama.*` ayarları istisna —
+  o config, kod değil.
 - **Tool ID yerine `takipNo` kullanır.** Entity döndürmez, sade DTO döndürür. Liste dönen
   tool'lara sert limit (max 20) koyar. Hata durumunda exception fırlatmak yerine anlamlı
   bir metin döndürür.
