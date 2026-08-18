@@ -9,7 +9,11 @@ Detaylı proje spesifikasyonu için `claude_dosya/belediye-ai-asistan-proje-doku
 ## Teknoloji
 
 - Java 21, Spring Boot 3.5.x, Spring AI 1.1.x
-- Model sağlayıcı: **Ollama** (yerel, ücretsiz) — chat: `qwen3:8b`, embedding: `bge-m3`
+- Model sağlayıcı: **Ollama** (yerel, ücretsiz) — chat: `qwen2.5:7b`, embedding: `bge-m3`
+  (`qwen3:8b` denendi ama "thinking" modu her cevabı ~2 kat yavaşlatıyordu; Spring AI
+  1.1.x'te bu YAML'dan kapatılamıyor, kod tarafında da provider'a özel sınıf gerektirdiği
+  için mimari kuralımıza aykırı olurdu — bunun yerine thinking modu olmayan `qwen2.5:7b`
+  seçildi, kod hiç değişmedi)
 - PostgreSQL 16 + pgvector, Flyway, Spring Data JPA
 - Frontend: React + Vite + TypeScript + Tailwind + shadcn/ui (`frontend/`), derlenip
   `src/main/resources/static`'e gömülür — proje dokümanındaki Thymeleaf planından
@@ -25,7 +29,7 @@ Detaylı proje spesifikasyonu için `claude_dosya/belediye-ai-asistan-proje-doku
   itibaren gerekli; Faz 0'da gerekmez). Tamamen yerel ve ücretsiz, veri dışarı çıkmaz.
   Kurulumdan sonra:
   ```powershell
-  ollama pull qwen3:8b
+  ollama pull qwen2.5:7b
   ollama pull bge-m3
   ```
 
