@@ -2,9 +2,13 @@ package tr.gov.karatay.asistan.config;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -39,6 +43,24 @@ public class ChatClientConfig {
               tavsiye, belediye ile ilgisiz sorular) kibarca kapsamını hatırlat.
             """;
 
+    // Spring AI'nin varsayılan (İngilizce) QuestionAnswerAdvisor şablonunun Türkçe
+    // çevirisi. Yer tutucu isimleri ({question_answer_context}, {query}) advisor
+    // tarafından sabit bekleniyor, değiştirilemez. {query} eksik olursa advisor
+    // kullanıcının asıl sorusunu mesaja hiç eklemiyor (bunu deneyerek bulduk).
+    private static final String SORU_CEVAP_SABLONU = """
+            Aşağıda bağlam bilgisi yer almaktadır, ---------------------- ile çevrelenmiştir.
+
+            ---------------------
+            {question_answer_context}
+            ---------------------
+
+            Önceki bilgini değil, verilen bağlamı ve geçmiş konuşma bilgisini kullanarak
+            kullanıcının sorusuna cevap ver. Cevap bağlamda yoksa, kullanıcıya bu soruyu
+            cevaplayamayacağını belirt.
+
+            Soru: {query}
+            """;
+
     @Bean
     ChatMemory chatMemory(@Value("${asistan.chat.memory-window}") int hafizaPenceresi) {
         return MessageWindowChatMemory.builder()
@@ -48,10 +70,27 @@ public class ChatClientConfig {
     }
 
     @Bean
-    ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory) {
+    QuestionAnswerAdvisor questionAnswerAdvisor(
+            VectorStore vectorStore,
+            @Value("${asistan.rag.top-k}") int topK,
+            @Value("${asistan.rag.similarity-threshold}") double benzerlikEsigi) {
+        SearchRequest aramaIstegi = SearchRequest.builder()
+                .topK(topK)
+                .similarityThreshold(benzerlikEsigi)
+                .build();
+        return QuestionAnswerAdvisor.builder(vectorStore)
+                .searchRequest(aramaIstegi)
+                .promptTemplate(new PromptTemplate(SORU_CEVAP_SABLONU))
+                .build();
+    }
+
+    @Bean
+    ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory, QuestionAnswerAdvisor questionAnswerAdvisor) {
         return builder
                 .defaultSystem(SISTEM_PROMPT)
-                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .defaultAdvisors(
+                        MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                        questionAnswerAdvisor)
                 .build();
     }
 }
