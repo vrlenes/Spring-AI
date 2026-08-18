@@ -115,7 +115,8 @@ Bkz. `CLAUDE.md`.
 
 - [x] Faz 0 — İskelet
 - [x] Faz 1 — Düz chat + hafıza (`/`, `/api/chat`, `/api/chat/stream`)
-- [ ] Faz 2 — RAG
+- [x] Faz 2 — RAG (PDF yükleme/listeleme/silme, `QuestionAnswerAdvisor`, koddan
+      kaynak gösterimi, sol panelde doküman yönetimi)
 - [ ] Faz 3 — Tool calling
 - [ ] Faz 4 — İyileştirme
 - [x] Faz 5 — Ollama geçişi (planlanandan erken yapıldı — hem chat hem embedding
