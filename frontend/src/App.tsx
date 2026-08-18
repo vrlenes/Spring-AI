@@ -3,6 +3,7 @@ import { Building2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { TypingDots } from '@/components/chat/TypingDots'
+import { EmptyState } from '@/components/chat/EmptyState'
 import { ChatComposer } from '@/components/chat/ChatComposer'
 import { streamChat } from '@/lib/chatStream'
 import type { ChatMessage } from '@/types/chat'
@@ -62,7 +63,7 @@ function App() {
       <div className="flex h-full max-h-[880px] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border bg-background shadow-xl">
         <header className="flex shrink-0 items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <span className="flex size-7 items-center justify-center rounded-full bg-foreground text-background">
+            <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <Building2 className="size-3.5" />
             </span>
             <div className="leading-tight">
@@ -76,20 +77,19 @@ function App() {
         </header>
 
         <div ref={viewportRef} className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex flex-col gap-4 p-4">
-            {mesajlar.length === 0 && (
-              <p className="mt-16 text-center text-[13px] text-muted-foreground">
-                Mevzuat sorularınızı veya vatandaş talepleriyle ilgili sorularınızı yazabilirsiniz.
-              </p>
-            )}
-            {mesajlar.map((m) =>
-              m.role === 'asistan' && m.id === streamingId && m.content === '' ? (
-                <TypingDots key={m.id} />
-              ) : (
-                <MessageBubble key={m.id} message={m} streaming={m.id === streamingId} />
-              ),
-            )}
-          </div>
+          {mesajlar.length === 0 ? (
+            <EmptyState onSelect={mesajGonder} />
+          ) : (
+            <div className="flex flex-col gap-4 p-4">
+              {mesajlar.map((m) =>
+                m.role === 'asistan' && m.id === streamingId && m.content === '' ? (
+                  <TypingDots key={m.id} />
+                ) : (
+                  <MessageBubble key={m.id} message={m} streaming={m.id === streamingId} />
+                ),
+              )}
+            </div>
+          )}
         </div>
 
         <ChatComposer disabled={gonderiliyor} onSend={mesajGonder} />
