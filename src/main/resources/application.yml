@@ -47,8 +47,10 @@ spring:
 
 asistan:
   rag:
+    # Spring AI 1.1.x'teki TokenTextSplitter'da ayri bir "overlap" parametresi yok
+    # (chunk-size + min-chunk-size-chars ile calisiyor), o yuzden dokumandaki
+    # chunk-overlap ayari burada yer almiyor.
     chunk-size: 800
-    chunk-overlap: 150
     top-k: 5
     similarity-threshold: 0.65
   chat:

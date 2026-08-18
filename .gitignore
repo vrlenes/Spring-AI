@@ -41,3 +41,6 @@ build/
 
 ### Claude Code ###
 .claude/
+
+### Test dokumanlari (yerel ingest testi icin, repoya girmez) ###
+/scratch-docs/
