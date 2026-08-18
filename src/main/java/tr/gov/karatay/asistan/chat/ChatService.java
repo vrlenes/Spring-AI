@@ -27,17 +27,25 @@ public class ChatService {
 
     // Sistem promptundaki "asla uydurma" kurali tek basina yetmiyor: kucuk yerel
     // modelde (qwen2.5:7b) genel bilgisine guvendigi konularda (orn. "belediye
-    // meclisi kac uyeden olusur") halusinasyon gordugumuz icin, hicbir belge
-    // eslesmediginde bunu mesaja acikca (ve o an icin) ekliyoruz - uzun sistem
-    // promptunun icinde gomulu bir kural olarak degil, dogrudan ve guncel bir
-    // "sistem notu" olarak, modelin gormezden gelmesi cok daha zor.
-    private static final String BELGE_BULUNAMADI_NOTU = """
+    // meclisi kac uyeden olusur", "meclis ve encumen farki") halusinasyon
+    // gorduk - hatta mesaja EKLENEN ilk (daha yumusak) uyari da her zaman
+    // yetmedi. Bunun yerine, dogrudan komut niteliginde, mesajin BASINA
+    // (sonuna degil - deneyerek daha guvenilir oldugunu gorduk) eklenen, genel
+    // sohbet icin acik istisnasi olan sert bir "sistem uyarisi" kullaniyoruz.
+    private static final String BELGE_BULUNAMADI_ONEKI = """
+            SİSTEM UYARISI - BU TALİMATI ATLAMA: Şu an vektör veritabanında \
+            kullanıcının sorusuyla eşleşen HİÇBİR belge parçası bulunamadı (0 sonuç). \
+            Kuralların gereği, bu durumda eğer aşağıdaki mesaj bir mevzuat/prosedür \
+            sorusuysa ASLA kendi bilgini, tahminini veya genel kültürünü kullanarak \
+            cevap YAZAMAZSIN - başka hiçbir açıklama eklemeden TAM OLARAK şu cümleyi \
+            yaz: "Bu konuda yüklenmiş belgelerde bilgi bulamadım." ANCAK bu kural \
+            SADECE mevzuat/prosedür sorularında geçerlidir - aşağıdaki mesaj genel \
+            bir sohbet, selamlama veya senin ne yapabildiğinle ilgiliyse bu kuralı \
+            yoksay ve normal, yardımcı bir şekilde cevap ver.
 
+            Şimdi kullanıcının mesajı:
 
-            (Sistem notu: Bu soruyla ilgili yüklü belgelerde hiçbir eşleşme bulunamadı. \
-            Bu bir mevzuat/prosedür sorusuysa KESİNLİKLE kendi genel bilgini kullanma, \
-            sadece "Bu konuda yüklenmiş belgelerde bilgi bulamadım" de. Genel bir \
-            sohbet/selamlama ise normal cevap ver.)""";
+            """;
 
     private final ChatClient chatClient;
     private final VectorStore vectorStore;
@@ -119,7 +127,7 @@ public class ChatService {
     }
 
     private String kullaniciMesajiHazirla(String mesaj, List<Kaynak> kaynaklar) {
-        return kaynaklar.isEmpty() ? mesaj + BELGE_BULUNAMADI_NOTU : mesaj;
+        return kaynaklar.isEmpty() ? BELGE_BULUNAMADI_ONEKI + mesaj : mesaj;
     }
 
     private List<Kaynak> ilgiliKaynaklariBul(String mesaj) {

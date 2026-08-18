@@ -1,9 +1,10 @@
 import karatayLogo from '@/assets/karatay-logo.png'
 
 const ORNEK_SORULAR = [
+  'Resmi yazışmalarda imza yetkisi kime aittir?',
+  'İmar planlarında kim yetkilidir?',
+  'Belediyenin görev ve sorumlulukları nelerdir?',
   'Sen kimsin, neler yapabilirsin?',
-  'Resmi yazışmalarda imza yetkisi nasıl düzenlenir?',
-  'Bir vatandaş talebini nasıl takip edebilirim?',
 ]
 
 interface EmptyStateProps {
@@ -17,8 +18,7 @@ export function EmptyState({ onSelect }: EmptyStateProps) {
       <div className="space-y-1">
         <p className="text-[14px] font-medium">Nasıl yardımcı olabilirim?</p>
         <p className="max-w-sm text-[12.5px] text-muted-foreground">
-          Mevzuat/prosedür sorularınızı veya vatandaş talepleriyle ilgili sorularınızı
-          yazabilirsiniz.
+          Sol paneldeki yüklü mevzuat belgeleriyle ilgili sorularınızı yazabilirsiniz.
         </p>
       </div>
       <div className="flex flex-col gap-1.5">
