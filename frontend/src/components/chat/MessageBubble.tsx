@@ -1,5 +1,6 @@
-import { Building2, User } from 'lucide-react'
+import { User } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import karatayMark from '@/assets/karatay-mark.png'
 import { cn } from '@/lib/utils'
 import type { ChatMessage } from '@/types/chat'
 
@@ -9,14 +10,16 @@ interface MessageBubbleProps {
 }
 
 function RoleAvatar({ kullaniciMi }: { kullaniciMi: boolean }) {
+  if (kullaniciMi) {
+    return (
+      <span className="flex size-6.5 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+        <User className="size-3.5" />
+      </span>
+    )
+  }
   return (
-    <span
-      className={cn(
-        'flex size-6.5 shrink-0 items-center justify-center rounded-full',
-        kullaniciMi ? 'bg-muted text-foreground' : 'bg-primary text-primary-foreground',
-      )}
-    >
-      {kullaniciMi ? <User className="size-3.5" /> : <Building2 className="size-3.5" />}
+    <span className="flex size-6.5 shrink-0 items-center justify-center rounded-full bg-primary p-1">
+      <img src={karatayMark} alt="" className="size-full object-contain brightness-0 invert" />
     </span>
   )
 }

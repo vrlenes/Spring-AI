@@ -1,4 +1,4 @@
-import { Building2 } from 'lucide-react'
+import karatayLogo from '@/assets/karatay-logo.png'
 
 const ORNEK_SORULAR = [
   'Sen kimsin, neler yapabilirsin?',
@@ -13,9 +13,7 @@ interface EmptyStateProps {
 export function EmptyState({ onSelect }: EmptyStateProps) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-      <span className="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
-        <Building2 className="size-5" />
-      </span>
+      <img src={karatayLogo} alt="" className="h-14 w-auto" />
       <div className="space-y-1">
         <p className="text-[14px] font-medium">Nasıl yardımcı olabilirim?</p>
         <p className="max-w-sm text-[12.5px] text-muted-foreground">

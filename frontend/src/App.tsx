@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react'
-import { Building2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import karatayLogo from '@/assets/karatay-logo.png'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { TypingDots } from '@/components/chat/TypingDots'
 import { EmptyState } from '@/components/chat/EmptyState'
 import { ChatComposer } from '@/components/chat/ChatComposer'
+import { Sidebar } from '@/components/chat/Sidebar'
+import { Button } from '@/components/ui/button'
 import { streamChat } from '@/lib/chatStream'
 import type { ChatMessage } from '@/types/chat'
 
@@ -59,17 +60,14 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-muted p-4 sm:p-8">
-      <div className="flex h-full max-h-[880px] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border bg-background shadow-xl">
-        <header className="flex shrink-0 items-center justify-between border-b px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <Building2 className="size-3.5" />
-            </span>
-            <div className="leading-tight">
-              <h1 className="text-[13px] font-semibold tracking-tight">Karatay Belediyesi</h1>
-              <p className="text-[11px] text-muted-foreground">AI Asistanı</p>
-            </div>
+    <div className="flex h-screen w-full bg-background">
+      <Sidebar onYeniKonusma={yeniKonusmaBaslat} />
+
+      <main className="flex min-w-0 flex-1 flex-col">
+        <header className="flex shrink-0 items-center justify-between border-b px-4 py-3 md:hidden">
+          <div className="flex items-center gap-2">
+            <img src={karatayLogo} alt="Karatay Belediyesi" className="h-8 w-auto" />
+            <span className="text-[13px] font-semibold">AI Asistanı</span>
           </div>
           <Button variant="ghost" size="sm" onClick={yeniKonusmaBaslat} className="text-[12.5px]">
             Yeni Konuşma
@@ -80,7 +78,7 @@ function App() {
           {mesajlar.length === 0 ? (
             <EmptyState onSelect={mesajGonder} />
           ) : (
-            <div className="flex flex-col gap-4 p-4">
+            <div className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
               {mesajlar.map((m) =>
                 m.role === 'asistan' && m.id === streamingId && m.content === '' ? (
                   <TypingDots key={m.id} />
@@ -92,8 +90,10 @@ function App() {
           )}
         </div>
 
-        <ChatComposer disabled={gonderiliyor} onSend={mesajGonder} />
-      </div>
+        <div className="mx-auto w-full max-w-2xl">
+          <ChatComposer disabled={gonderiliyor} onSend={mesajGonder} />
+        </div>
+      </main>
     </div>
   )
 }
