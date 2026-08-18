@@ -8,6 +8,9 @@ target/
 .env
 .env.properties
 
+### Frontend build ciktisi (frontend/npm run build ile uretilir) ###
+/src/main/resources/static/*
+
 ### STS ###
 .apt_generated
 .classpath
