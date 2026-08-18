@@ -54,9 +54,13 @@ public class ChatClientConfig {
             {question_answer_context}
             ---------------------
 
-            Önceki bilgini değil, verilen bağlamı ve geçmiş konuşma bilgisini kullanarak
-            kullanıcının sorusuna cevap ver. Cevap bağlamda yoksa, kullanıcıya bu soruyu
-            cevaplayamayacağını belirt.
+            Önceki bilgini değil, SADECE yukarıdaki bağlamı ve geçmiş konuşma bilgisini
+            kullanarak kullanıcının sorusuna cevap ver.
+
+            ÖNEMLİ: Yukarıdaki bağlam boşsa, soruyla ilgisizse veya sorunun cevabını
+            içermiyorsa, KESİNLİKLE "Bu konuda yüklenmiş belgelerde bilgi bulamadım" de.
+            Genel/eğitim verinden bir cevap UYDURMA - bağlamda olmayan hiçbir mevzuat
+            bilgisi verme, kısmen bile olsa tahmin yürütme.
 
             Soru: {query}
             """;
@@ -84,13 +88,17 @@ public class ChatClientConfig {
                 .build();
     }
 
+    // QuestionAnswerAdvisor kasıtlı olarak burada defaultAdvisors'a eklenmiyor.
+    // ChatService, her istekte önce kendi similaritySearch'unu yapip sonuc BOS
+    // ciktiginda advisor'i o istege hic eklemiyor - cunku bos baglamla bile
+    // advisor'in "baglami kullanarak cevapla" cercevesi, kucuk yerel modeli
+    // (qwen2.5:7b) genel bilgisinden halusinasyon uretmeye itiyordu. Salt sistem
+    // promptu (advisor'siz) bu durumda guvenilir sekilde "bulamadim" diyor.
     @Bean
-    ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory, QuestionAnswerAdvisor questionAnswerAdvisor) {
+    ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory) {
         return builder
                 .defaultSystem(SISTEM_PROMPT)
-                .defaultAdvisors(
-                        MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                        questionAnswerAdvisor)
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .build();
     }
 }
