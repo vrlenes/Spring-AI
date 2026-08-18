@@ -16,7 +16,9 @@ Detaylı proje spesifikasyonu için `claude_dosya/belediye-ai-asistan-proje-doku
 
 - JDK 21+
 - Docker Desktop (Windows'ta çalışır durumda olmalı)
-- Bir OpenAI API anahtarı (Faz 1'den itibaren gerekli; Faz 0'da gerekmez)
+- Bir chat API anahtarı (Faz 1'den itibaren gerekli; Faz 0'da gerekmez). Geliştirmede
+  varsayılan olarak ücretsiz katmanı olan **Groq** kullanılıyor (kredi kartı gerekmiyor):
+  https://console.groq.com/keys adresinden anahtar alın.
 
 ## Kurulum (Windows / PowerShell)
 
@@ -24,7 +26,7 @@ Detaylı proje spesifikasyonu için `claude_dosya/belediye-ai-asistan-proje-doku
 
    ```powershell
    Copy-Item .env.example .env
-   # .env dosyasını açıp OPENAI_API_KEY değerini girin (Faz 1'den itibaren)
+   # .env dosyasını açıp OPENAI_API_KEY değerini girin (Faz 1'den itibaren, Groq anahtarı)
    ```
 
 2. Veritabanını ayağa kaldırın:
