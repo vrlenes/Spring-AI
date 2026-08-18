@@ -76,8 +76,8 @@ Bkz. `CLAUDE.md`.
 
 ## Faz durumu
 
-- [x] Faz 0 — İskelet (bu commit)
-- [ ] Faz 1 — Düz chat + hafıza
+- [x] Faz 0 — İskelet
+- [x] Faz 1 — Düz chat + hafıza (`/`, `/api/chat`, `/api/chat/stream`)
 - [ ] Faz 2 — RAG
 - [ ] Faz 3 — Tool calling
 - [ ] Faz 4 — İyileştirme
