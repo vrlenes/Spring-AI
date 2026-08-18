@@ -1,0 +1,59 @@
+spring:
+  config:
+    import: optional:file:.env[.properties]
+
+  application:
+    name: belediye-ai-asistan
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/belediye_asistan}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
+
+  ai:
+    openai:
+      # Faz 1'de gercek bir anahtar .env dosyasina yazilmali. Bos birakilirsa
+      # uygulama yine ayaga kalkar (Faz 0 hedefi) ama chat cagrilari basarisiz olur.
+      api-key: ${OPENAI_API_KEY:not-set}
+      chat:
+        options:
+          model: ${AI_CHAT_MODEL:gpt-4o-mini}
+          temperature: 0.2
+      embedding:
+        options:
+          model: ${AI_EMBEDDING_MODEL:text-embedding-3-small}
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        dimensions: 1536
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+
+asistan:
+  rag:
+    chunk-size: 800
+    chunk-overlap: 150
+    top-k: 5
+    similarity-threshold: 0.65
+  chat:
+    memory-window: 20
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
