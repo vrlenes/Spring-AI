@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
-import { Input } from '@/components/ui/input'
+import { useState, type FormEvent, type KeyboardEvent } from 'react'
+import { ArrowUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface ChatComposerProps {
   disabled: boolean
@@ -9,6 +10,7 @@ interface ChatComposerProps {
 
 export function ChatComposer({ disabled, onSend }: ChatComposerProps) {
   const [deger, setDeger] = useState('')
+  const canSend = deger.trim().length > 0 && !disabled
 
   function gonder(e: FormEvent) {
     e.preventDefault()
@@ -18,18 +20,40 @@ export function ChatComposer({ disabled, onSend }: ChatComposerProps) {
     onSend(mesaj)
   }
 
+  function tusaBasildi(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      gonder(e)
+    }
+  }
+
   return (
-    <form onSubmit={gonder} className="flex gap-2 border-t bg-background p-3">
-      <Input
-        value={deger}
-        onChange={(e) => setDeger(e.target.value)}
-        placeholder="Bir soru yazın..."
-        autoComplete="off"
-        disabled={disabled}
-      />
-      <Button type="submit" disabled={disabled || !deger.trim()}>
-        Gönder
-      </Button>
+    <form onSubmit={gonder} className="border-t bg-background/80 p-3 backdrop-blur">
+      <div
+        className={cn(
+          'mx-auto flex max-w-3xl items-center gap-1.5 rounded-full border bg-muted/40 py-1.5 pr-1.5 pl-4 shadow-sm transition-colors',
+          'focus-within:border-foreground/15 focus-within:bg-background',
+        )}
+      >
+        <input
+          value={deger}
+          onChange={(e) => setDeger(e.target.value)}
+          onKeyDown={tusaBasildi}
+          placeholder="Bir soru yazın..."
+          autoComplete="off"
+          disabled={disabled}
+          className="min-w-0 flex-1 bg-transparent text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        />
+        <Button
+          type="submit"
+          size="icon"
+          disabled={!canSend}
+          aria-label="Gönder"
+          className="size-8 shrink-0 rounded-full"
+        >
+          <ArrowUp className="size-4" />
+        </Button>
+      </div>
     </form>
   )
 }
