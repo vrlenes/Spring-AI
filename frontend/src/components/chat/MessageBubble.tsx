@@ -1,9 +1,24 @@
-import { FileText, User } from 'lucide-react'
+import { FileText, User, Wrench } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import karatayMark from '@/assets/karatay-mark.png'
 import { BekleyenIslemKarti } from '@/components/chat/BekleyenIslemKarti'
 import { cn } from '@/lib/utils'
 import type { ChatMessage, Kaynak } from '@/types/chat'
+
+function AracRozetleri({ araclar }: { araclar: string[] }) {
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {araclar.map((arac) => (
+        <span
+          key={arac}
+          className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground"
+        >
+          <Wrench className="size-3" /> {arac}
+        </span>
+      ))}
+    </div>
+  )
+}
 
 function KaynakKartlari({ kaynaklar }: { kaynaklar: Kaynak[] }) {
   return (
@@ -84,6 +99,7 @@ export function MessageBubble({ message, streaming }: MessageBubbleProps) {
           {streaming && (
             <span className="ml-0.5 inline-block h-3.5 w-0.5 translate-y-0.5 animate-pulse rounded-full bg-foreground/70" />
           )}
+          {message.araclar && message.araclar.length > 0 && <AracRozetleri araclar={message.araclar} />}
           {message.kaynaklar && message.kaynaklar.length > 0 && (
             <KaynakKartlari kaynaklar={message.kaynaklar} />
           )}

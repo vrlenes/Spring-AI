@@ -34,6 +34,7 @@ import tr.gov.karatay.asistan.talep.dto.TalepOzeti;
 public class TalepTools {
 
     public static final String PENDING_ACTION_ID_SINK = "pendingActionIdSink";
+    public static final String KULLANILAN_ARAC_SINK = "kullanilanAracSink";
 
     private static final DateTimeFormatter TARIH_BICIMI = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
@@ -66,7 +67,9 @@ public class TalepTools {
             @ToolParam(required = false, description = "Kullanici bir zaman araligi belirttiyse (orn. 'son 30 gun') gun sayisi olarak yaz, belirtmediyse bos birak.")
             Integer gunSayisi,
             @ToolParam(required = false, description = "Donecek maksimum kayit sayisi, varsayilan ve ust sinir 20.")
-            Integer limit) {
+            Integer limit,
+            ToolContext toolContext) {
+        kaydetKullanilanArac(toolContext, "Talepler sorgulandı");
         TalepDurumu durumEnum;
         try {
             durumEnum = durum == null || durum.isBlank() ? null : TalepDurumu.valueOf(durum.trim().toUpperCase());
@@ -84,7 +87,9 @@ public class TalepTools {
 
     @Tool(description = "Verilen takip numarasina ait talebin tum detaylarini ve gecmis notlarini getirir.")
     public String talepDetayGetir(
-            @ToolParam(description = "Talebin takip numarasi, orn. 'TLP-2026-00001'.") String takipNo) {
+            @ToolParam(description = "Talebin takip numarasi, orn. 'TLP-2026-00001'.") String takipNo,
+            ToolContext toolContext) {
+        kaydetKullanilanArac(toolContext, "Talep detayı getirildi");
         return talepService.talepDetayGetir(takipNo)
                 .map(this::detayMetni)
                 .orElse("\"%s\" takip numarali talep bulunamadi.".formatted(takipNo));
@@ -94,7 +99,9 @@ public class TalepTools {
     public String talepIstatistik(
             @ToolParam(description = "Istatistigin kapsayacagi gun sayisi, orn. 30.") int gunSayisi,
             @ToolParam(required = false, description = "Filtrelenecek mudurlugun tam adi. Bos birakilirsa tum mudurlukler dahil edilir.")
-            String mudurluk) {
+            String mudurluk,
+            ToolContext toolContext) {
+        kaydetKullanilanArac(toolContext, "İstatistik hesaplandı");
         TalepIstatistik istatistik = talepService.talepIstatistik(gunSayisi, mudurluk);
         String basaLik = istatistik.mudurlukAdi() == null
                 ? "Son %d gun - tum mudurlukler".formatted(istatistik.gunSayisi())
@@ -108,7 +115,8 @@ public class TalepTools {
     }
 
     @Tool(description = "Tum aktif mudurlukleri ve sorumluluk alanlarini listeler. Bir talebi hangi mudurluge atayacagini belirlemeden once bunu kullan.")
-    public String mudurlukleriListele() {
+    public String mudurlukleriListele(ToolContext toolContext) {
+        kaydetKullanilanArac(toolContext, "Müdürlükler listelendi");
         List<MudurlukOzeti> mudurlukler = mudurlukService.mudurlukleriListele();
         return mudurlukler.stream()
                 .map(m -> "- %s: %s".formatted(m.ad(), m.sorumlulukAlani()))
@@ -207,10 +215,20 @@ public class TalepTools {
     private String teklifOlustur(PendingActionTeklifi teklif, ToolContext toolContext) {
         PendingAction action = pendingActionService.olustur(teklif);
         kaydetPendingActionId(toolContext, action.id());
+        kaydetKullanilanArac(toolContext, teklifEtiketi(teklif.tur()));
         return "ONAY BEKLENIYOR: %s Bu ozeti kullaniciya ilet ve arayuzdeki Onayla/Iptal "
                 .formatted(teklif.aciklama())
                 + "secenegini kullanmasini soyle. Onay/iptal islemi otomatik olarak arayuz uzerinden yapilacak, "
                 + "sen bir sey yapmana gerek yok.";
+    }
+
+    private String teklifEtiketi(PendingActionTuru tur) {
+        return switch (tur) {
+            case MUDURLUGE_ATA -> "Atama teklifi oluşturuldu";
+            case DURUM_GUNCELLE -> "Durum güncelleme teklifi oluşturuldu";
+            case ONCELIK_GUNCELLE -> "Öncelik güncelleme teklifi oluşturuldu";
+            case NOT_EKLE -> "Not ekleme teklifi oluşturuldu";
+        };
     }
 
     @SuppressWarnings("unchecked")
@@ -221,6 +239,17 @@ public class TalepTools {
         Object sink = toolContext.getContext().get(PENDING_ACTION_ID_SINK);
         if (sink instanceof List<?> liste) {
             ((List<String>) liste).add(id);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void kaydetKullanilanArac(ToolContext toolContext, String etiket) {
+        if (toolContext == null) {
+            return;
+        }
+        Object sink = toolContext.getContext().get(KULLANILAN_ARAC_SINK);
+        if (sink instanceof List<?> liste) {
+            ((List<String>) liste).add(etiket);
         }
     }
 

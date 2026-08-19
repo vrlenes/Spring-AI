@@ -52,6 +52,12 @@ function App() {
           )
           return
         }
+        if (olay.type === 'araclar') {
+          setMesajlar((onceki) =>
+            onceki.map((m) => (m.id === asistanId ? { ...m, araclar: olay.araclar } : m)),
+          )
+          return
+        }
         setMesajlar((onceki) =>
           onceki.map((m) => (m.id === asistanId ? { ...m, content: m.content + olay.text } : m)),
         )

@@ -5,5 +5,9 @@ import java.util.List;
 import tr.gov.karatay.asistan.talep.dto.PendingActionOzeti;
 
 public record ChatResponse(
-        String conversationId, String cevap, List<Kaynak> kaynaklar, PendingActionOzeti bekleyenIslem) {
+        String conversationId,
+        String cevap,
+        List<Kaynak> kaynaklar,
+        PendingActionOzeti bekleyenIslem,
+        List<String> araclar) {
 }

@@ -85,10 +85,13 @@ public class ChatService {
         String conversationId = conversationIdCoz(istek.conversationId());
         List<Kaynak> kaynaklar = ilgiliKaynaklariBul(istek.mesaj());
         List<String> bekleyenIslemIdleri = new ArrayList<>();
+        List<String> kullanilanAraclar = new ArrayList<>();
 
         ChatClientResponse yanit = chatClient.prompt()
                 .user(kullaniciMesajiHazirla(istek.mesaj(), kaynaklar))
-                .toolContext(Map.of(TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri))
+                .toolContext(Map.of(
+                        TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri,
+                        TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar))
                 .advisors(a -> {
                     a.param(ChatMemory.CONVERSATION_ID, conversationId);
                     if (!kaynaklar.isEmpty()) {
@@ -98,20 +101,28 @@ public class ChatService {
                 .call()
                 .chatClientResponse();
 
-        return new ChatResponse(conversationId, metniCikar(yanit), kaynaklar, bekleyenIslemBul(bekleyenIslemIdleri));
+        return new ChatResponse(
+                conversationId,
+                metniCikar(yanit),
+                kaynaklar,
+                bekleyenIslemBul(bekleyenIslemIdleri),
+                benzersiz(kullanilanAraclar));
     }
 
     public Flux<ServerSentEvent<String>> akisliYanitla(ChatRequest istek) {
         String conversationId = conversationIdCoz(istek.conversationId());
         List<Kaynak> kaynaklar = ilgiliKaynaklariBul(istek.mesaj());
         List<String> bekleyenIslemIdleri = new ArrayList<>();
+        List<String> kullanilanAraclar = new ArrayList<>();
 
         Flux<ServerSentEvent<String>> conversationIdOlayi = Flux.just(
                 ServerSentEvent.builder(conversationId).event("conversationId").build());
 
         Flux<ServerSentEvent<String>> tokenOlaylari = chatClient.prompt()
                 .user(kullaniciMesajiHazirla(istek.mesaj(), kaynaklar))
-                .toolContext(Map.of(TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri))
+                .toolContext(Map.of(
+                        TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri,
+                        TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar))
                 .advisors(a -> {
                     a.param(ChatMemory.CONVERSATION_ID, conversationId);
                     if (!kaynaklar.isEmpty()) {
@@ -152,7 +163,24 @@ public class ChatService {
             }
         });
 
-        return Flux.concat(conversationIdOlayi, tokenOlaylari, kaynakOlayi, bekleyenIslemOlayi);
+        Flux<ServerSentEvent<String>> araclarOlayi = Flux.defer(() -> {
+            List<String> araclar = benzersiz(kullanilanAraclar);
+            if (araclar.isEmpty()) {
+                return Flux.empty();
+            }
+            try {
+                String json = objectMapper.writeValueAsString(araclar);
+                return Flux.just(ServerSentEvent.builder(json).event("araclar").build());
+            } catch (JsonProcessingException e) {
+                return Flux.empty();
+            }
+        });
+
+        return Flux.concat(conversationIdOlayi, tokenOlaylari, kaynakOlayi, bekleyenIslemOlayi, araclarOlayi);
+    }
+
+    private List<String> benzersiz(List<String> liste) {
+        return liste.stream().distinct().toList();
     }
 
     private PendingActionOzeti bekleyenIslemBul(List<String> bekleyenIslemIdleri) {

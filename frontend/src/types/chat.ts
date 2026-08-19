@@ -19,6 +19,7 @@ export interface ChatMessage {
   content: string
   kaynaklar?: Kaynak[]
   bekleyenIslem?: BekleyenIslem
+  araclar?: string[]
 }
 
 export type ChatStreamEvent =
@@ -26,3 +27,4 @@ export type ChatStreamEvent =
   | { type: 'token'; text: string }
   | { type: 'kaynaklar'; kaynaklar: Kaynak[] }
   | { type: 'bekleyenIslem'; bekleyenIslem: BekleyenIslem }
+  | { type: 'araclar'; araclar: string[] }

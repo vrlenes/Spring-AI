@@ -65,6 +65,12 @@ export async function streamChat(
         } catch {
           // sunucudan bozuk JSON gelirse bekleyen islemi sessizce yok say
         }
+      } else if (olayAdi === 'araclar') {
+        try {
+          onEvent({ type: 'araclar', araclar: JSON.parse(veri) })
+        } catch {
+          // sunucudan bozuk JSON gelirse arac listesini sessizce yok say
+        }
       }
     }
   }
