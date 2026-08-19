@@ -2,7 +2,6 @@ package tr.gov.karatay.asistan.chat;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -37,31 +36,18 @@ public class ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
 
-    // Sistem promptundaki "asla uydurma" kurali tek basina yetmiyor: kucuk yerel
-    // modelde (qwen2.5:7b) genel bilgisine guvendigi konularda (orn. "belediye
-    // meclisi kac uyeden olusur", "meclis ve encumen farki") halusinasyon
-    // gorduk - hatta mesaja EKLENEN ilk (daha yumusak) uyari da her zaman
-    // yetmedi. Bunun yerine, dogrudan komut niteliginde, mesajin BASINA
-    // (sonuna degil - deneyerek daha guvenilir oldugunu gorduk) eklenen, genel
-    // sohbet icin acik istisnasi olan sert bir "sistem uyarisi" kullaniyoruz.
-    private static final String BELGE_BULUNAMADI_ONEKI = """
-            SİSTEM UYARISI - BU TALİMATI ATLAMA: Şu an vektör veritabanında \
-            kullanıcının sorusuyla eşleşen HİÇBİR belge parçası bulunamadı (0 sonuç). \
-            Kuralların gereği, bu durumda eğer aşağıdaki mesaj bir mevzuat/prosedür \
-            sorusuysa ASLA kendi bilgini, tahminini veya genel kültürünü kullanarak \
-            cevap YAZAMAZSIN - başka hiçbir açıklama eklemeden TAM OLARAK şu cümleyi \
-            yaz: "Bu konuda yüklenmiş belgelerde bilgi bulamadım." ANCAK bu kural \
-            SADECE mevzuat/prosedür sorularında geçerlidir. Aşağıdaki mesaj genel \
-            bir sohbet, selamlama, senin ne yapabildiğinle ilgiliyse VEYA vatandaş \
-            talepleriyle ilgili bir istekse (listeleme, arama, atama, durum/öncelik \
-            güncelleme, not ekleme, istatistik, müdürlük bilgisi gibi - bu tür \
-            isteklerde belge aranmaz, sana verilen ilgili aracı kullanarak cevap \
-            ver) bu kuralı yoksay ve normal, yardımcı bir şekilde cevap ver.
-
-            Şimdi kullanıcının mesajı:
-
-            """;
-
+    // Onceden, kucuk yerel modelin (qwen2.5:7b) belgesiz mevzuat sorularinda
+    // hafizasindan halusinasyon uretmesini engellemek icin mesaja zorla bir
+    // "sadece 'bulamadim' de" talimati ekleniyordu (BELGE_BULUNAMADI_ONEKI) -
+    // ve bunun talep isteklerine karismamasi icin ayri bir anahtar-kelime
+    // yonlendirmesi (talepIstegiGibi) gerekiyordu. Bu mekanizma kaldirildi:
+    // artik model belgede olmayan bir soruya kendi genel bilgisiyle cevap
+    // VEREBILIR (sistem promptu bunu "genel bilgiye dayaniyorum" diye acikca
+    // belirtmesini istiyor), ama cevabin belgeye mi yoksa genel bilgiye mi
+    // dayandigi frontend'de KODDAN turetiliyor: kaynaklar ve araclar listesi
+    // ikisi de bossa, arayuz bunu "genel bilgi" olarak isaretliyor - modelin
+    // kendi ifadesine guvenmeden, ayni "kaynak gosterimi koddan uretilir"
+    // prensibiyle (bkz. CLAUDE.md).
     private final ChatClient chatClient;
     private final VectorStore vectorStore;
     private final QuestionAnswerAdvisor questionAnswerAdvisor;
@@ -97,7 +83,7 @@ public class ChatService {
         List<String> kullanilanAraclar = new ArrayList<>();
 
         ChatClientResponse yanit = llmSinirlayici.sinirliCagir(() -> chatClient.prompt()
-                .user(kullaniciMesajiHazirla(istek.mesaj(), kaynaklar))
+                .user(istek.mesaj())
                 .toolContext(Map.of(
                         TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri,
                         TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar))
@@ -146,7 +132,7 @@ public class ChatService {
                 ServerSentEvent.builder(conversationId).event("conversationId").build());
 
         Flux<ServerSentEvent<String>> tokenOlaylari = chatClient.prompt()
-                .user(kullaniciMesajiHazirla(istek.mesaj(), kaynaklar))
+                .user(istek.mesaj())
                 .toolContext(Map.of(
                         TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri,
                         TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar))
@@ -227,29 +213,6 @@ public class ChatService {
                 .getir(bekleyenIslemIdleri.get(0))
                 .map(a -> new PendingActionOzeti(a.id(), a.tur(), a.takipNo(), a.aciklama()))
                 .orElse(null);
-    }
-
-    // Kucuk yerel model, BELGE_BULUNAMADI_ONEKI icindeki "ama talep yonetimi
-    // istegiyse yoksay" istisnasini guvenilir sekilde ayirt edemiyor (denendi,
-    // "Acik talepleri listele" gibi acik bir tool komutunu bile mevzuat sorusu
-    // sanip "bulamadim" diyebiliyor). Bu yuzden ayirim modelin yorumuna degil,
-    // koddaki bu anahtar kelime kontrolune birakiliyor - ayni "kaynak gosterimi
-    // LLM'e degil koda dayanir" prensibi (bkz. CLAUDE.md).
-    private static final List<String> TALEP_ANAHTAR_KELIMELERI = List.of(
-            "talep", "tlp-", "müdürlük", "sikayet", "şikayet", "öncelik", "oncelik",
-            "durum güncelle", "durum guncelle", "takip no", "not ekle", "istatistik",
-            "mahalle", "vatandaş", "vatandas");
-
-    private boolean talepIstegiGibi(String mesaj) {
-        String kucukMesaj = mesaj.toLowerCase(Locale.of("tr"));
-        return TALEP_ANAHTAR_KELIMELERI.stream().anyMatch(kucukMesaj::contains);
-    }
-
-    private String kullaniciMesajiHazirla(String mesaj, List<Kaynak> kaynaklar) {
-        if (!kaynaklar.isEmpty() || talepIstegiGibi(mesaj)) {
-            return mesaj;
-        }
-        return BELGE_BULUNAMADI_ONEKI + mesaj;
     }
 
     private List<Kaynak> ilgiliKaynaklariBul(String mesaj) {

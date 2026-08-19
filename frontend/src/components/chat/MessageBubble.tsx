@@ -1,4 +1,4 @@
-import { FileText, User, Wrench } from 'lucide-react'
+import { FileText, Globe, User, Wrench } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import karatayMark from '@/assets/karatay-mark.png'
 import { BekleyenIslemKarti } from '@/components/chat/BekleyenIslemKarti'
@@ -17,6 +17,18 @@ function AracRozetleri({ araclar }: { araclar: string[] }) {
         </span>
       ))}
     </div>
+  )
+}
+
+// Model belgeye/talep sistemine dayanmadan (kaynaklar VE araclar bos) cevap
+// verdiginde gosterilir. Bu isaret modelin kendi ifadesine degil, KODDAN
+// (bu iki listenin bos olup olmadigina) dayanir - modele guvenmek yerine
+// (bkz. CLAUDE.md "kaynak gosterimi koddan uretilir" ilkesi).
+function GenelBilgiRozeti() {
+  return (
+    <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground italic">
+      <Globe className="size-3" /> Genel bilgi — yüklenmiş belgelerde veya talep sisteminde bulunamadı, doğrulayın
+    </p>
   )
 }
 
@@ -104,6 +116,10 @@ export function MessageBubble({ message, streaming }: MessageBubbleProps) {
             <KaynakKartlari kaynaklar={message.kaynaklar} />
           )}
           {message.bekleyenIslem && <BekleyenIslemKarti bekleyenIslem={message.bekleyenIslem} />}
+          {!streaming &&
+            message.content &&
+            !(message.araclar && message.araclar.length > 0) &&
+            !(message.kaynaklar && message.kaynaklar.length > 0) && <GenelBilgiRozeti />}
         </div>
       )}
     </div>

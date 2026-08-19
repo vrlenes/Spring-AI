@@ -7,7 +7,6 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,21 +16,15 @@ import org.springframework.context.annotation.Primary;
 
 import tr.gov.karatay.asistan.talep.TalepTools;
 
-// CLAUDE.md'nin "saglayiciya ozel sinif import etme" kuralina BILINCLI, DAR
-// KAPSAMLI bir istisna: OllamaChatOptions burada SADECE siniflandirmaChatClient
-// icin "thinking" kapatmak amaciyla kullaniliyor. Bunu denedik: Spring AI
-// 1.1.8'de bu ayarin YAML/config uzerinden yapilmasinin hicbir yolu yok -
-// ThinkOption tipi icin kayitli bir property converter olmadigi icin YAML'dan
-// baglamaya calisinca uygulama hic acilmiyor (ConverterNotFoundException).
-// Modelle (qwen2.5:7b vs qwen3:8b) karsilastirmali test ettik: siniflandirma/
-// oneri gorevinde thinking hem yavaslatiyor hem yanlis oranini artiriyor
-// (bkz. proje sohbet gecmisi) - o yuzden SADECE o istemcide kapatildi. Ana
-// sohbet istemcisinde (chatClient) bilincli olarak HICBIR think ayari
-// yapilmiyor: qwen3 ile thinking'i tamamen kapatmak sohbet/tool-calling
-// gorevinde bazen sessiz bos cevap uretme riski gosterdi (test edilerek
-// bulundu) - o yuzden o istemci icin Ollama'nin kendi guvenilir varsayilanina
-// (tam thinking) birakiliyor. Saglayici degisirse SADECE bu dosyadaki
-// .defaultOptions(...) satirinin kaldirilmasi/degistirilmesi yeterli.
+// NOT: Bu siniftaki her ChatClient onceden (Ollama donemi) qwen2.5:7b/qwen3:8b
+// icin OllamaChatOptions.disableThinking() gibi saglayiciya-ozel ayarlar
+// iceriyordu (CLAUDE.md'nin "saglayiciya ozel sinif yok" kuralina dar kapsamli,
+// belgelenmis bir istisnayla). Sohbet saglayicisi Google GenAI'ya (Gemini,
+// application.yml -> spring.ai.model.chat) tasinirken bu ayarlar kaldirildi -
+// artik hicbir yerde saglayiciya ozel sinif import edilmiyor, kural tekrar
+// istisnasiz uygulaniyor. Saglayici degisikligi SADECE application.yml'de
+// oldu, bu dosyada hicbir kod degismedi - CLAUDE.md'nin amacladigi tam olarak
+// buydu.
 @Configuration
 public class ChatClientConfig {
 
@@ -46,11 +39,14 @@ public class ChatClientConfig {
                ve durum güncelleme işlemlerini araçlar (tools) aracılığıyla yapmak.
 
             KURALLAR:
-            - Mevzuat sorularında SADECE sana verilen belge içeriğine dayan.
-              Belgede yoksa "Bu konuda yüklenmiş belgelerde bilgi bulamadım" de.
-              ASLA hafızandan mevzuat maddesi uydurma. Yanlış bilgi, bilgi
-              vermemekten çok daha zararlıdır.
-            - Cevabında hangi belgeye ve hangi bölüme dayandığını mutlaka belirt.
+            - Mevzuat sorularında ÖNCELİKLE sana verilen belge içeriğine dayan
+              ve hangi belgeye/bölüme dayandığını mutlaka belirt. Belgede
+              yeterli bilgi yoksa bunu asla belgedenmiş gibi sunma - istersen
+              genel bilgini de kullanarak cevap verebilirsin, ama bunun
+              yüklenmiş belgelere değil kendi genel bilgine dayandığını açıkça
+              belirt (örn. "Bu konu yüklenmiş belgelerde yok, genel bilgime
+              göre..."). Hangi kısmın belgeden hangi kısmın genel bilginden
+              geldiğini asla karıştırma.
             - Veri DEĞİŞTİREN araçlar (atama, durum güncelleme, öncelik güncelleme,
               not ekleme) çağrıldığında işlemi HEMEN UYGULAMAZ - sadece bir öneri
               (bekleyen işlem) oluşturur ve arayüzde kullanıcıya Onayla/İptal
@@ -112,7 +108,6 @@ public class ChatClientConfig {
     ChatClient siniflandirmaChatClient(ChatClient.Builder builder) {
         return builder.clone()
                 .defaultSystem(SINIFLANDIRMA_SISTEM_PROMPTU)
-                .defaultOptions(OllamaChatOptions.builder().disableThinking().build())
                 .build();
     }
 
@@ -141,7 +136,6 @@ public class ChatClientConfig {
     ChatClient resmiYaziChatClient(ChatClient.Builder builder) {
         return builder.clone()
                 .defaultSystem(RESMI_YAZI_SISTEM_PROMPTU)
-                .defaultOptions(OllamaChatOptions.builder().disableThinking().build())
                 .build();
     }
 
