@@ -1,5 +1,6 @@
 import type {
   Mudurluk,
+  ResmiYaziTaslagi,
   SiniflandirmaOnerisi,
   TalepDetay,
   TalepDurumu,
@@ -96,6 +97,15 @@ export async function topluAiOnerisiGetir(limit?: number): Promise<TopluSiniflan
   const yanit = await fetch(`/api/talepler/ai-oneri-toplu${params}`)
   if (!yanit.ok) {
     throw new Error(`Toplu AI önerisi alınamadı (HTTP ${yanit.status})`)
+  }
+  return yanit.json()
+}
+
+export async function resmiYaziTaslagiGetir(takipNo: string): Promise<ResmiYaziTaslagi> {
+  const yanit = await fetch(`/api/talepler/${encodeURIComponent(takipNo)}/resmi-yazi`)
+  if (!yanit.ok) {
+    const hataGovdesi = await yanit.json().catch(() => null)
+    throw new Error(hataGovdesi?.hata ?? `Resmi yazı taslağı alınamadı (HTTP ${yanit.status})`)
   }
   return yanit.json()
 }

@@ -51,5 +51,10 @@ export interface TopluSiniflandirmaOnerisi {
   oneri: SiniflandirmaOnerisi
 }
 
+export interface ResmiYaziTaslagi {
+  takipNo: string
+  taslak: string
+}
+
 export const TALEP_DURUMLARI: TalepDurumu[] = ['YENI', 'ATANDI', 'ISLEMDE', 'COZULDU', 'REDDEDILDI']
 export const TALEP_ONCELIKLERI: TalepOnceligi[] = ['DUSUK', 'NORMAL', 'YUKSEK', 'ACIL']

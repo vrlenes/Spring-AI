@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,7 @@ import tr.gov.karatay.asistan.talep.dto.TalepOzeti;
 @Service
 public class TalepService {
 
+    private static final Logger log = LoggerFactory.getLogger(TalepService.class);
     private static final int LISTE_SERT_LIMIT = 20;
 
     private final TalepRepository talepRepository;
@@ -163,6 +166,7 @@ public class TalepService {
         talepRepository.save(talep);
 
         notEkle(talep, "AI Asistan", "Talep \"%s\" müdürlüğüne atandı.".formatted(mudurluk.getAd()));
+        log.info("Talep mudurluge atandi: takipNo={}, mudurluk={}", talep.getTakipNo(), mudurluk.getAd());
         return detayVer(talep);
     }
 
@@ -175,6 +179,7 @@ public class TalepService {
         talepRepository.save(talep);
 
         notEkle(talep, "AI Asistan", "Durum \"%s\" -> \"%s\" olarak güncellendi.".formatted(eskiDurum, yeniDurum));
+        log.info("Talep durumu guncellendi: takipNo={}, {} -> {}", talep.getTakipNo(), eskiDurum, yeniDurum);
         return detayVer(talep);
     }
 
@@ -187,6 +192,7 @@ public class TalepService {
         talepRepository.save(talep);
 
         notEkle(talep, "AI Asistan", "Öncelik \"%s\" -> \"%s\" olarak güncellendi.".formatted(eskiOncelik, yeniOncelik));
+        log.info("Talep onceligi guncellendi: takipNo={}, {} -> {}", talep.getTakipNo(), eskiOncelik, yeniOncelik);
         return detayVer(talep);
     }
 
@@ -203,6 +209,7 @@ public class TalepService {
                 "AI Önerisi",
                 "Kategori \"%s\" -> \"%s\" olarak güncellendi."
                         .formatted(eskiKategori == null ? "(boş)" : eskiKategori, kategori));
+        log.info("Talep kategorisi guncellendi: takipNo={}, {} -> {}", talep.getTakipNo(), eskiKategori, kategori);
         return detayVer(talep);
     }
 
@@ -210,6 +217,7 @@ public class TalepService {
     public TalepDetay talebeNotEkle(String takipNo, String notMetni, String personel) {
         Talep talep = talepGetirYoksaHataFirlat(takipNo);
         notEkle(talep, personel == null || personel.isBlank() ? "Bilinmiyor" : personel, notMetni);
+        log.info("Talebe not eklendi: takipNo={}", talep.getTakipNo());
         return detayVer(talep);
     }
 

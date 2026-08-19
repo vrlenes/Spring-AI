@@ -116,6 +116,35 @@ public class ChatClientConfig {
                 .build();
     }
 
+    // Resmi yazi taslagi icin ayri bir ChatClient. Bu da tek seferlik, ama
+    // yapisal degil serbest metin (dogasi geregi bir resmi yazi govdesi
+    // yapilandirilmis alanlara sigmaz). Risk dusuk tutuluyor: sonuc HICBIR
+    // ZAMAN otomatik gonderilmiyor/kaydedilmiyor, sadece kullaniciya
+    // kopyalayip duzenleyebilecegi bir TASLAK olarak gosteriliyor.
+    private static final String RESMI_YAZI_SISTEM_PROMPTU = """
+            Sen Karatay Belediyesi'nde resmi yazışma taslağı hazırlayan bir
+            yardımcısın. Sana bir vatandaş talebinin detayları ve (varsa)
+            resmi yazışma kurallarına dair belge alıntıları verilecek.
+            Görevin, bu talebi ilgili müdürlüğe havale eden resmi bir yazı
+            taslağı hazırlamak.
+
+            KURALLAR:
+            - Sana verilen belge alıntılarındaki format kurallarına uy (varsa).
+            - Yazı; tarih ve sayı için yer tutucu, "İlgi:"/"Konu:" gibi resmi
+              başlıklar, gövde metni ve resmi bir kapanış cümlesiyle bitmeli.
+            - SADECE taslağı yaz, başka açıklama ekleme.
+            - Taslağın en sonuna, ayrı bir satırda şunu ekle: "(Bu bir
+              taslaktır, göndermeden önce mutlaka gözden geçirin.)"
+            """;
+
+    @Bean
+    ChatClient resmiYaziChatClient(ChatClient.Builder builder) {
+        return builder.clone()
+                .defaultSystem(RESMI_YAZI_SISTEM_PROMPTU)
+                .defaultOptions(OllamaChatOptions.builder().disableThinking().build())
+                .build();
+    }
+
     // NOT: "Talep Yonetimi" ekraninda dogal dilden filtre cikaran benzer bir
     // ChatClient (filtreCikarmaChatClient) denendi ama kaldirildi - test
     // edildi (bkz. proje sohbet gecmisi): yapisal cikti (.entity()) kullanmasina

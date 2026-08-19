@@ -7,6 +7,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import tr.gov.karatay.asistan.common.LlmEsZamanliSinirlayici;
 import tr.gov.karatay.asistan.mudurluk.MudurlukService;
 import tr.gov.karatay.asistan.mudurluk.dto.MudurlukOzeti;
 import tr.gov.karatay.asistan.talep.dto.SiniflandirmaOnerisi;
@@ -24,14 +25,17 @@ public class TalepOneriService {
     private final ChatClient siniflandirmaChatClient;
     private final TalepService talepService;
     private final MudurlukService mudurlukService;
+    private final LlmEsZamanliSinirlayici llmSinirlayici;
 
     public TalepOneriService(
             @Qualifier("siniflandirmaChatClient") ChatClient siniflandirmaChatClient,
             TalepService talepService,
-            MudurlukService mudurlukService) {
+            MudurlukService mudurlukService,
+            LlmEsZamanliSinirlayici llmSinirlayici) {
         this.siniflandirmaChatClient = siniflandirmaChatClient;
         this.talepService = talepService;
         this.mudurlukService = mudurlukService;
+        this.llmSinirlayici = llmSinirlayici;
     }
 
     private static final int TOPLU_ONERI_SERT_LIMIT = 20;
@@ -85,11 +89,11 @@ public class TalepOneriService {
                         talep.kategori() == null ? "sınıflandırılmamış" : talep.kategori(),
                         mudurlukListesi);
 
-        SiniflandirmaOnerisi oneri = siniflandirmaChatClient
+        SiniflandirmaOnerisi oneri = llmSinirlayici.sinirliCagir(() -> siniflandirmaChatClient
                 .prompt()
                 .user(kullaniciMesaji)
                 .call()
-                .entity(SiniflandirmaOnerisi.class);
+                .entity(SiniflandirmaOnerisi.class));
 
         return dogrula(oneri, mudurlukler);
     }

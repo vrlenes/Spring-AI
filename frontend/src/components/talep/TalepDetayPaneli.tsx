@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, X } from 'lucide-react'
+import { Copy, FileText, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DurumRozeti, OncelikMetni } from '@/components/talep/rozetler'
 import {
   aiOnerisiGetir,
+  resmiYaziTaslagiGetir,
   talebeNotEkle,
   talebiMudurlugeAta,
   talepDetayGetir,
@@ -45,12 +46,19 @@ export function TalepDetayPaneli({ takipNo, mudurlukler, onKapat, onDegisti }: T
   const [oneriYukleniyor, setOneriYukleniyor] = useState(false)
   const [oneriHatasi, setOneriHatasi] = useState<string | null>(null)
 
+  const [taslak, setTaslak] = useState<string | null>(null)
+  const [taslakYukleniyor, setTaslakYukleniyor] = useState(false)
+  const [taslakHatasi, setTaslakHatasi] = useState<string | null>(null)
+  const [kopyalandi, setKopyalandi] = useState(false)
+
   useEffect(() => {
     let iptalEdildi = false
     setYukleniyor(true)
     setHata(null)
     setOneri(null)
     setOneriHatasi(null)
+    setTaslak(null)
+    setTaslakHatasi(null)
     talepDetayGetir(takipNo)
       .then((d) => {
         if (iptalEdildi) return
@@ -92,6 +100,26 @@ export function TalepDetayPaneli({ takipNo, mudurlukler, onKapat, onDegisti }: T
     } finally {
       setOneriYukleniyor(false)
     }
+  }
+
+  async function resmiYaziTaslagiIste() {
+    setTaslakYukleniyor(true)
+    setTaslakHatasi(null)
+    setKopyalandi(false)
+    try {
+      const sonuc = await resmiYaziTaslagiGetir(takipNo)
+      setTaslak(sonuc.taslak)
+    } catch (e) {
+      setTaslakHatasi(e instanceof Error ? e.message : 'Resmi yazı taslağı alınamadı.')
+    } finally {
+      setTaslakYukleniyor(false)
+    }
+  }
+
+  async function taslagiKopyala() {
+    if (!taslak) return
+    await navigator.clipboard.writeText(taslak)
+    setKopyalandi(true)
   }
 
   async function oneriyiUygula() {
@@ -177,6 +205,31 @@ export function TalepDetayPaneli({ takipNo, mudurlukler, onKapat, onDegisti }: T
                     Reddet
                   </Button>
                 </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2 border-t pt-3">
+            <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+              Resmi Yazı Taslağı
+            </p>
+            <Button size="sm" variant="outline" onClick={resmiYaziTaslagiIste} disabled={taslakYukleniyor}>
+              <FileText className="size-3.5" /> {taslakYukleniyor ? 'Taslak hazırlanıyor...' : 'Taslak Oluştur'}
+            </Button>
+
+            {taslakHatasi && <p className="text-destructive">{taslakHatasi}</p>}
+
+            {taslak && (
+              <div className="space-y-2 rounded-lg border bg-muted/30 p-2.5">
+                <textarea
+                  readOnly
+                  value={taslak}
+                  rows={10}
+                  className="w-full resize-y rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-[12.5px] leading-relaxed text-foreground outline-none"
+                />
+                <Button size="sm" variant="outline" onClick={taslagiKopyala}>
+                  <Copy className="size-3.5" /> {kopyalandi ? 'Kopyalandı' : 'Kopyala'}
+                </Button>
               </div>
             )}
           </div>

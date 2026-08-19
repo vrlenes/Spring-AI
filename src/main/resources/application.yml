@@ -55,6 +55,10 @@ asistan:
     similarity-threshold: 0.65
   chat:
     memory-window: 20
+  llm:
+    # Yerel Ollama modeli tek bir GPU/CPU kaynagini paylasiyor - ayni anda
+    # islenebilecek LLM istegi sayisini sinirlar (bkz. LlmEsZamanliSinirlayici).
+    es-zamanli-istek-siniri: 2
 
 management:
   endpoints:

@@ -6,6 +6,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
@@ -24,12 +26,16 @@ import reactor.core.publisher.Flux;
 import tr.gov.karatay.asistan.chat.dto.ChatRequest;
 import tr.gov.karatay.asistan.chat.dto.ChatResponse;
 import tr.gov.karatay.asistan.chat.dto.Kaynak;
+import tr.gov.karatay.asistan.common.CokFazlaIstekException;
+import tr.gov.karatay.asistan.common.LlmEsZamanliSinirlayici;
 import tr.gov.karatay.asistan.talep.PendingActionService;
 import tr.gov.karatay.asistan.talep.TalepTools;
 import tr.gov.karatay.asistan.talep.dto.PendingActionOzeti;
 
 @Service
 public class ChatService {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatService.class);
 
     // Sistem promptundaki "asla uydurma" kurali tek basina yetmiyor: kucuk yerel
     // modelde (qwen2.5:7b) genel bilgisine guvendigi konularda (orn. "belediye
@@ -61,6 +67,7 @@ public class ChatService {
     private final QuestionAnswerAdvisor questionAnswerAdvisor;
     private final PendingActionService pendingActionService;
     private final ObjectMapper objectMapper;
+    private final LlmEsZamanliSinirlayici llmSinirlayici;
     private final int topK;
     private final double benzerlikEsigi;
 
@@ -70,6 +77,7 @@ public class ChatService {
             QuestionAnswerAdvisor questionAnswerAdvisor,
             PendingActionService pendingActionService,
             ObjectMapper objectMapper,
+            LlmEsZamanliSinirlayici llmSinirlayici,
             @Value("${asistan.rag.top-k}") int topK,
             @Value("${asistan.rag.similarity-threshold}") double benzerlikEsigi) {
         this.chatClient = chatClient;
@@ -77,6 +85,7 @@ public class ChatService {
         this.questionAnswerAdvisor = questionAnswerAdvisor;
         this.pendingActionService = pendingActionService;
         this.objectMapper = objectMapper;
+        this.llmSinirlayici = llmSinirlayici;
         this.topK = topK;
         this.benzerlikEsigi = benzerlikEsigi;
     }
@@ -87,7 +96,7 @@ public class ChatService {
         List<String> bekleyenIslemIdleri = new ArrayList<>();
         List<String> kullanilanAraclar = new ArrayList<>();
 
-        ChatClientResponse yanit = chatClient.prompt()
+        ChatClientResponse yanit = llmSinirlayici.sinirliCagir(() -> chatClient.prompt()
                 .user(kullaniciMesajiHazirla(istek.mesaj(), kaynaklar))
                 .toolContext(Map.of(
                         TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri,
@@ -99,7 +108,13 @@ public class ChatService {
                     }
                 })
                 .call()
-                .chatClientResponse();
+                .chatClientResponse());
+
+        log.info(
+                "Sohbet yaniti uretildi: conversationId={}, kaynakSayisi={}, kullanilanArac={}",
+                conversationId,
+                kaynaklar.size(),
+                benzersiz(kullanilanAraclar));
 
         return new ChatResponse(
                 conversationId,
@@ -110,6 +125,18 @@ public class ChatService {
     }
 
     public Flux<ServerSentEvent<String>> akisliYanitla(ChatRequest istek) {
+        // Izin, Flux insa edilmeden ONCE senkron olarak alinir: Flux'lar tembel
+        // (lazy) kuruldugu icin, izinAl() burada degil de bir Flux operatoru
+        // icinde cagrilsaydi, hemen firlatilan bir CokFazlaIstekException yerine
+        // reaktif zincirin bir yerinde sinyallenen bir hata elde ederdik - bunun
+        // @RestControllerAdvice tarafindan guvenilir sekilde yakalanip
+        // yakalanmayacagi (WebFlux olmayan bu uygulamada) belirsiz. Senkron
+        // firlatma, controller metodu cagrilirken atildigi icin kesin yakalanir.
+        if (!llmSinirlayici.izinAl()) {
+            throw new CokFazlaIstekException(
+                    "Sistem şu anda başka isteklerle meşgul, lütfen birkaç saniye sonra tekrar deneyin.");
+        }
+
         String conversationId = conversationIdCoz(istek.conversationId());
         List<Kaynak> kaynaklar = ilgiliKaynaklariBul(istek.mesaj());
         List<String> bekleyenIslemIdleri = new ArrayList<>();
@@ -176,7 +203,16 @@ public class ChatService {
             }
         });
 
-        return Flux.concat(conversationIdOlayi, tokenOlaylari, kaynakOlayi, bekleyenIslemOlayi, araclarOlayi);
+        return Flux.concat(conversationIdOlayi, tokenOlaylari, kaynakOlayi, bekleyenIslemOlayi, araclarOlayi)
+                .doFinally(sinyal -> {
+                    llmSinirlayici.izinBirak();
+                    log.info(
+                            "Akisli sohbet yaniti tamamlandi: conversationId={}, kaynakSayisi={}, kullanilanArac={}, sinyal={}",
+                            conversationId,
+                            kaynaklar.size(),
+                            benzersiz(kullanilanAraclar),
+                            sinyal);
+                });
     }
 
     private List<String> benzersiz(List<String> liste) {

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import tr.gov.karatay.asistan.common.enums.TalepDurumu;
 import tr.gov.karatay.asistan.common.enums.TalepOnceligi;
+import tr.gov.karatay.asistan.talep.dto.ResmiYaziTaslagi;
 import tr.gov.karatay.asistan.talep.dto.SiniflandirmaOnerisi;
 import tr.gov.karatay.asistan.talep.dto.TalepDetay;
 import tr.gov.karatay.asistan.talep.dto.TalepIstatistik;
@@ -33,10 +34,13 @@ public class TalepController {
 
     private final TalepService talepService;
     private final TalepOneriService talepOneriService;
+    private final ResmiYaziService resmiYaziService;
 
-    public TalepController(TalepService talepService, TalepOneriService talepOneriService) {
+    public TalepController(
+            TalepService talepService, TalepOneriService talepOneriService, ResmiYaziService resmiYaziService) {
         this.talepService = talepService;
         this.talepOneriService = talepOneriService;
+        this.resmiYaziService = resmiYaziService;
     }
 
     @GetMapping
@@ -60,6 +64,11 @@ public class TalepController {
     @GetMapping("/ai-oneri-toplu")
     public List<TopluSiniflandirmaOnerisi> topluAiOnerisi(@RequestParam(required = false) Integer limit) {
         return talepOneriService.topluOneriOlustur(limit);
+    }
+
+    @GetMapping("/{takipNo}/resmi-yazi")
+    public ResmiYaziTaslagi resmiYaziTaslagi(@PathVariable String takipNo) {
+        return resmiYaziService.taslakOlustur(takipNo);
     }
 
     @GetMapping("/istatistik")
