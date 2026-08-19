@@ -53,10 +53,23 @@ aynı config'teki proxy ile `localhost:8080`'e yönlendirilir.
 - **Tool ID yerine `takipNo` kullanır.** Entity döndürmez, sade DTO döndürür. Liste dönen
   tool'lara sert limit (max 20) koyar. Hata durumunda exception fırlatmak yerine anlamlı
   bir metin döndürür.
-- **Yazma işlemleri (atama, durum güncelleme) önce kullanıcı onayı gerektirir**, okuma
-  işlemleri (listeleme, arama) gerektirmez. Bu kural system prompt'ta uygulanır.
+- **Yazma işlemleri (atama, durum güncelleme, öncelik güncelleme, not ekleme) önce
+  kullanıcı onayı gerektirir**, okuma işlemleri (listeleme, arama) gerektirmez. Bu kural
+  başlangıçta sadece system prompt'ta uygulanıyordu, ama küçük yerel modelde (qwen2.5:7b)
+  güvenilmez çıktı — bazen onay almadan işlem yapıyor, bazen onaydan sonra aracı hiç
+  çağırmadan "yapıldı" diyordu. Bu yüzden **koda taşındı**: yazma tool'ları (`TalepTools`)
+  veriyi doğrudan değiştirmez, sadece doğrulanmış bir `PendingAction` oluşturur
+  (`PendingActionService`); gerçek mutasyon sadece kullanıcının arayüzdeki Onayla
+  butonuna basıp `POST /api/pending-actions/{id}/onayla` çağrılmasıyla olur. Onay
+  artık modelin kararına değil, kullanıcının buton tıklamasına bağlı.
 - Kaynak gösterimi (RAG) **koddan** üretilir, LLM'e "kaynak söyle" demekle değil —
   hallüsinasyon riskini kapatmak için retrieve edilen doküman metadata'sı kullanılır.
+- **Talep listeleme/arama tek bir tool'da birleşik** (`TalepTools.talepleriGetir`).
+  Proje dokümanı bunu iki ayrı tool olarak tanımlıyordu (`acikTalepleriListele` +
+  `talepAra`) — küçük yerel model ikisi arasında güvenilir seçim yapamadığı ve
+  parametre uydurduğu için (test edilerek doğrulandı) tek tool'a birleştirildi, bu
+  dokümandan bilinçli bir sapma. Parametre verilmezse varsayılan olarak açık
+  (YENI/ATANDI/ISLEMDE) talepler döner.
 
 ## Çalıştırma komutları (Windows / PowerShell)
 

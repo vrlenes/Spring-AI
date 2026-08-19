@@ -1,6 +1,7 @@
 import { FileText, User } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import karatayMark from '@/assets/karatay-mark.png'
+import { BekleyenIslemKarti } from '@/components/chat/BekleyenIslemKarti'
 import { cn } from '@/lib/utils'
 import type { ChatMessage, Kaynak } from '@/types/chat'
 
@@ -86,6 +87,7 @@ export function MessageBubble({ message, streaming }: MessageBubbleProps) {
           {message.kaynaklar && message.kaynaklar.length > 0 && (
             <KaynakKartlari kaynaklar={message.kaynaklar} />
           )}
+          {message.bekleyenIslem && <BekleyenIslemKarti bekleyenIslem={message.bekleyenIslem} />}
         </div>
       )}
     </div>

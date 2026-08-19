@@ -7,12 +7,31 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
+import tr.gov.karatay.asistan.talep.TalepTools;
+
+// CLAUDE.md'nin "saglayiciya ozel sinif import etme" kuralina BILINCLI, DAR
+// KAPSAMLI bir istisna: OllamaChatOptions burada SADECE siniflandirmaChatClient
+// icin "thinking" kapatmak amaciyla kullaniliyor. Bunu denedik: Spring AI
+// 1.1.8'de bu ayarin YAML/config uzerinden yapilmasinin hicbir yolu yok -
+// ThinkOption tipi icin kayitli bir property converter olmadigi icin YAML'dan
+// baglamaya calisinca uygulama hic acilmiyor (ConverterNotFoundException).
+// Modelle (qwen2.5:7b vs qwen3:8b) karsilastirmali test ettik: siniflandirma/
+// oneri gorevinde thinking hem yavaslatiyor hem yanlis oranini artiriyor
+// (bkz. proje sohbet gecmisi) - o yuzden SADECE o istemcide kapatildi. Ana
+// sohbet istemcisinde (chatClient) bilincli olarak HICBIR think ayari
+// yapilmiyor: qwen3 ile thinking'i tamamen kapatmak sohbet/tool-calling
+// gorevinde bazen sessiz bos cevap uretme riski gosterdi (test edilerek
+// bulundu) - o yuzden o istemci icin Ollama'nin kendi guvenilir varsayilanina
+// (tam thinking) birakiliyor. Saglayici degisirse SADECE bu dosyadaki
+// .defaultOptions(...) satirinin kaldirilmasi/degistirilmesi yeterli.
 @Configuration
 public class ChatClientConfig {
 
@@ -32,9 +51,21 @@ public class ChatClientConfig {
               ASLA hafızandan mevzuat maddesi uydurma. Yanlış bilgi, bilgi
               vermemekten çok daha zararlıdır.
             - Cevabında hangi belgeye ve hangi bölüme dayandığını mutlaka belirt.
-            - Veri DEĞİŞTİREN bir işlem yapmadan önce (atama, durum güncelleme,
-              not ekleme) kullanıcıya ne yapacağını özetle ve onay iste.
-              Onay gelmeden aracı çağırma.
+            - Veri DEĞİŞTİREN araçlar (atama, durum güncelleme, öncelik güncelleme,
+              not ekleme) çağrıldığında işlemi HEMEN UYGULAMAZ - sadece bir öneri
+              (bekleyen işlem) oluşturur ve arayüzde kullanıcıya Onayla/İptal
+              seçeneği otomatik olarak sunulur. Sen bu aracı bir kere çağırıp
+              dönen özeti kullanıcıya ilettikten sonra GÖREVİN BİTER.
+            - Kullanıcı sohbette "evet", "onaylıyorum", "yap" gibi bir onay mesajı
+              yazsa BİLE aynı yazma aracını TEKRAR ÇAĞIRMA ve "yapıldı/atandı/
+              güncellendi" DEME - onay/iptal işlemi artık senin değil, arayüzdeki
+              butonun sorumluluğundadır ve henüz gerçekleşmemiş olabilir. Böyle
+              bir mesaja SADECE şu şekilde, başka hiçbir ekleme yapmadan cevap
+              ver: "Onayınız için teşekkürler, işlemi tamamlamak üzere yukarıdaki
+              Onayla butonunu kullanmanız gerekiyor."
+            - Aracı çağırmadan "yapıldı", "güncellendi", "atandı" gibi ifadeler
+              KESİNLİKLE KULLANMA - bu araçlar zaten hiçbir zaman anında
+              uygulanmaz, her zaman "onay bekleniyor" şeklinde cevap ver.
             - Veri OKUYAN işlemleri (listeleme, arama) onay istemeden yapabilirsin.
             - Bir talebi hangi müdürlüğe atayacağını belirlerken müdürlüklerin
               sorumluluk alanlarını dikkate al. Emin değilsen tahmin etme, sor.
@@ -64,6 +95,34 @@ public class ChatClientConfig {
 
             Soru: {query}
             """;
+
+    // Talep siniflandirma onerisi icin ayri, dar kapsamli bir ChatClient. Ana
+    // sohbet asistanindan (memory, tool-calling, uzun sistem promptu) bilincli
+    // olarak izole - tek seferlik, yapisal (JSON semasina zorlanmis) bir cikti
+    // uretmesi yeterli, konusma gecmisine veya baska araclara ihtiyaci yok.
+    private static final String SINIFLANDIRMA_SISTEM_PROMPTU = """
+            Sen bir belediye talep sınıflandırma yardımcısısın. Sana bir vatandaş
+            talebinin konusu ve müdürlüklerin sorumluluk alanları verilecek.
+            Görevin: talebi en uygun müdürlüğe eşleştirmek ve kısa (2-4 kelimelik)
+            bir kategori etiketi önermek. Müdürlük adını sana verilen listedeki
+            isimlerden BİRİNİ BİREBİR kullan, kendi müdürlük adı uydurma.
+            """;
+
+    @Bean
+    ChatClient siniflandirmaChatClient(ChatClient.Builder builder) {
+        return builder.clone()
+                .defaultSystem(SINIFLANDIRMA_SISTEM_PROMPTU)
+                .defaultOptions(OllamaChatOptions.builder().disableThinking().build())
+                .build();
+    }
+
+    // NOT: "Talep Yonetimi" ekraninda dogal dilden filtre cikaran benzer bir
+    // ChatClient (filtreCikarmaChatClient) denendi ama kaldirildi - test
+    // edildi (bkz. proje sohbet gecmisi): yapisal cikti (.entity()) kullanmasina
+    // ragmen model sik sik alakasiz/yanlis mudurluk ve durum degerleri
+    // uyduruyordu, prompt iyilestirmesi bile durumu duzeltmedi (bazen
+    // kotulestirdi). Dusuk riskli (sadece bir okuma filtresi) olmasina ragmen
+    // guvenilirligi yeterli bulunmadigi icin bu ozellik eklenmedi.
 
     @Bean
     ChatMemory chatMemory(@Value("${asistan.chat.memory-window}") int hafizaPenceresi) {
@@ -95,10 +154,12 @@ public class ChatClientConfig {
     // (qwen2.5:7b) genel bilgisinden halusinasyon uretmeye itiyordu. Salt sistem
     // promptu (advisor'siz) bu durumda guvenilir sekilde "bulamadim" diyor.
     @Bean
-    ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory) {
+    @Primary
+    ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory, TalepTools talepTools) {
         return builder
                 .defaultSystem(SISTEM_PROMPT)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .defaultTools(talepTools)
                 .build();
     }
 }

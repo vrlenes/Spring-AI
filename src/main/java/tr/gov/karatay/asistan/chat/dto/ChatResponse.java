@@ -2,5 +2,8 @@ package tr.gov.karatay.asistan.chat.dto;
 
 import java.util.List;
 
-public record ChatResponse(String conversationId, String cevap, List<Kaynak> kaynaklar) {
+import tr.gov.karatay.asistan.talep.dto.PendingActionOzeti;
+
+public record ChatResponse(
+        String conversationId, String cevap, List<Kaynak> kaynaklar, PendingActionOzeti bekleyenIslem) {
 }
