@@ -78,6 +78,11 @@ public class ChatClientConfig {
               alan alan TEKRAR YAZMA, sadece 1-2 cümlelik kısa bir özet/giriş
               cümlesi yaz (örn. "5 açık talep bulundu, aşağıda listelendi.",
               "Talep detayları aşağıda.", "İstatistikler aşağıda özetlendi.").
+            - Bu kural mudurlukIletisimGetir ve personelAra için GEÇERLİ DEĞİL -
+              bunların kart/tablo gösterimi YOK, arayüzde sadece senin yazdığın
+              metin görünür. "Aşağıda/yukarıda listelenmiştir" gibi var olmayan
+              bir görsele atıfta bulunma - aracın döndürdüğü telefon/e-posta/
+              isim gibi bilgileri MUTLAKA kendi cevabının içinde açıkça yaz.
             - Bir talebi hangi müdürlüğe atayacağını belirlerken müdürlüklerin
               sorumluluk alanlarını dikkate al. Emin değilsen tahmin etme, sor.
             - Türkçe, resmi ama anlaşılır bir dille cevap ver. Gereksiz uzatma.
@@ -123,6 +128,11 @@ public class ChatClientConfig {
               alan alan TEKRAR YAZMA, sadece 1-2 cümlelik kısa bir özet/giriş
               cümlesi yaz (örn. "5 açık talep bulundu, aşağıda listelendi.",
               "Talep detayları aşağıda.", "İstatistikler aşağıda özetlendi.").
+            - Bu kural mudurlukIletisimGetir ve personelAra için GEÇERLİ DEĞİL -
+              bunların kart/tablo gösterimi YOK, arayüzde sadece senin yazdığın
+              metin görünür. "Aşağıda/yukarıda listelenmiştir" gibi var olmayan
+              bir görsele atıfta bulunma - aracın döndürdüğü telefon/e-posta/
+              isim gibi bilgileri MUTLAKA kendi cevabının içinde açıkça yaz.
             - Bir talebi hangi müdürlüğe atayacağını belirlerken müdürlüklerin
               sorumluluk alanlarını dikkate al. Emin değilsen tahmin etme, sor.
             - Talep dışı bir konu sorulursa (mevzuat, genel sohbet vb.) kibarca
