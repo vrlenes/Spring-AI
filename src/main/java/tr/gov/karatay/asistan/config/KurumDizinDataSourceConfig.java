@@ -47,6 +47,28 @@ public class KurumDizinDataSourceConfig {
         return dataSourceProperties.initializeDataSourceBuilder().build();
     }
 
+    // KURUM DIZINI BUG'UNUN GERCEK KOK NEDENI (canli, cok derin bir teshis
+    // surecinde bulundu - ham JDBC, duz JdbcTemplate, HikariCP'li JdbcTemplate
+    // hepsi izole test edildi ve HEPSI DOGRU calisti; sadece TAM uygulama
+    // context'inde RAG aramasi sessizce sifir sonuc donuyordu): asagidaki
+    // kurumJdbcTemplate bean'i, Boot'un otomatik yapilandirdigi ana
+    // JdbcTemplate bean'ini de (Flyway'de daha once yasanan @ConditionalOn
+    // MissingBean sorunuyla AYNI SINIFTAN bir hata) SESSIZCE devre disi
+    // birakiyordu - PgVectorStoreAutoConfiguration da JdbcTemplate'i TURE
+    // GORE (qualifier olmadan) autowire ettigi icin, geriye kalan TEK
+    // JdbcTemplate bean'i olan kurumJdbcTemplate'i (kurum_dizini DB'sine
+    // bagli) yanlislikla RAG aramasi icin kullanmaya basladi - ana DB'de
+    // arama yapmasi gerekirken kurum_dizini'nde (hicbir vector_store tablosu
+    // olmayan) arama yapiyordu, bu yuzden HER ZAMAN sifir sonuc donuyordu.
+    // Duzeltme: DataSource/DataSourceProperties'te oldugu gibi, kendi
+    // JdbcTemplate'imizi de @Primary ile ACIKCA tanimlayip belirsizligi
+    // ortadan kaldiriyoruz.
+    @Bean
+    @Primary
+    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
+
     @Bean
     @ConfigurationProperties("kurum.datasource")
     public DataSourceProperties kurumDataSourceProperties() {
