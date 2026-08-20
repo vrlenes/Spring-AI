@@ -173,7 +173,7 @@ class SohbetServiceTest {
         void kaynaklarAraclarBekleyenIslemYapisalVeriJsonOlarakSaklanir() {
             Sohbet sohbet = ornekSohbet("id-1", "Başlık");
             when(sohbetRepository.findById("id-1")).thenReturn(Optional.of(sohbet));
-            List<Kaynak> kaynaklar = List.of(new Kaynak("Belge", 1, 0.9));
+            List<Kaynak> kaynaklar = List.of(new Kaynak("Belge", 1, 0.9, null));
             List<String> araclar = List.of("Talepler sorgulandı");
             PendingActionOzeti bekleyenIslem =
                     new PendingActionOzeti("pid-1", PendingActionTuru.MUDURLUGE_ATA, "TLP-2026-00001", "açıklama");
@@ -230,7 +230,7 @@ class SohbetServiceTest {
             mesaj.setSohbet(sohbet);
             mesaj.setRol(MesajRolu.ASISTAN);
             mesaj.setIcerik("Cevap metni");
-            mesaj.setKaynaklar(om.writeValueAsString(List.of(new Kaynak("Belge", 2, 0.8))));
+            mesaj.setKaynaklar(om.writeValueAsString(List.of(new Kaynak("Belge", 2, 0.8, 19))));
             mesaj.setAraclar(om.writeValueAsString(List.of("Talepler sorgulandı")));
             mesaj.setBekleyenIslem(null);
             mesaj.setOlusturmaTarihi(LocalDateTime.now());

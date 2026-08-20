@@ -4,6 +4,7 @@ export interface Kaynak {
   baslik: string
   parcaNo: number
   benzerlik: number | null
+  maddeNo: number | null
 }
 
 // "tip" alani hangi kart bilesenin render edilecegini belirler (bkz.

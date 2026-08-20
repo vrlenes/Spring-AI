@@ -1,6 +1,7 @@
 package tr.gov.karatay.asistan.rag;
 
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.model.ToolContext;
@@ -33,6 +34,10 @@ public class RagTools {
 
     public static final String KAYNAK_SINK = "kaynakSink";
     public static final String MOD_KEY = "aktifMod";
+
+    // "Madde 19 –" / "MADDE 55 – (1)" gibi her iki buyuk/kucuk harf ve tire
+    // varyantini yakalar (bkz. maddeNoCikar).
+    private static final Pattern MADDE_DESENI = Pattern.compile("(?i)madde\\s+(\\d+)");
 
     private final VectorStore vectorStore;
     private final int topK;
@@ -119,9 +124,23 @@ public class RagTools {
                         .add(new Kaynak(
                                 String.valueOf(belge.getMetadata().getOrDefault("baslik", "Bilinmeyen belge")),
                                 belge.getMetadata().get("chunkIndex") instanceof Number sayi ? sayi.intValue() : 0,
-                                belge.getScore()));
+                                belge.getScore(),
+                                maddeNoCikar(belge.getText())));
             }
         }
+    }
+
+    // Bir parca (chunk) birden fazla "Madde N" gecisi icerebilir (chunk
+    // sinirlari madde sinirlariyla hizali degil) - ilk gecen madde numarasi
+    // gosterilir, cunku parca metni genelde o maddeyle baslar/onu icerir.
+    // Sadece goruntuleme amacli bir ipucu; asil cevap hala tam parca
+    // metnine dayanir, bulunamazsa null donup frontend Parca No'ya doner.
+    private Integer maddeNoCikar(String metin) {
+        if (metin == null) {
+            return null;
+        }
+        var eslesme = MADDE_DESENI.matcher(metin);
+        return eslesme.find() ? Integer.valueOf(eslesme.group(1)) : null;
     }
 
     @SuppressWarnings("unchecked")

@@ -46,7 +46,9 @@ function KaynakKartlari({ kaynaklar }: { kaynaklar: Kaynak[] }) {
           className="flex items-center gap-2 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-[12px]"
         >
           <span className="min-w-0 flex-1 truncate text-foreground">{kaynak.baslik}</span>
-          <span className="shrink-0 text-muted-foreground">Parça {kaynak.parcaNo}</span>
+          <span className="shrink-0 text-muted-foreground">
+            {kaynak.maddeNo != null ? `Madde ${kaynak.maddeNo}` : `Parça ${kaynak.parcaNo}`}
+          </span>
           {kaynak.benzerlik != null && (
             <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[10.5px] text-primary">
               {Math.round(kaynak.benzerlik * 100)}%
