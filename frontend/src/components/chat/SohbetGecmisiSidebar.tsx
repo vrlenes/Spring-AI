@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LogOut, MessageSquare, Plus, Search, X } from 'lucide-react'
+import { LogOut, MessageSquare, Moon, Plus, Search, Sun, X } from 'lucide-react'
 import karatayLogo from '@/assets/karatay-logo.png'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useSohbetStore } from '@/stores/useSohbetStore'
+import { useTemaStore } from '@/stores/useTemaStore'
 import { cn } from '@/lib/utils'
 import type { SohbetModu } from '@/types/chat'
 
@@ -12,6 +13,7 @@ const MOD_ETIKETLERI: Record<SohbetModu, string> = { GENEL: 'Genel', TALEP: 'Tal
 export function SohbetGecmisiSidebar() {
   const { personel, cikisYap } = useAuthStore()
   const { sohbetListesi, aktifSohbetId, sohbetListesiniYukle, yeniKonusma, sohbetSec } = useSohbetStore()
+  const { tema, temaDegistir } = useTemaStore()
   const [arama, setArama] = useState('')
 
   useEffect(() => {
@@ -99,13 +101,23 @@ export function SohbetGecmisiSidebar() {
 
       <div className="flex items-center justify-between gap-2 border-t px-4 py-3">
         <span className="min-w-0 truncate text-[12px] text-muted-foreground">{personel?.adSoyad}</span>
-        <button
-          type="button"
-          onClick={cikisYap}
-          className="flex shrink-0 items-center gap-1 text-[11.5px] text-muted-foreground hover:text-foreground"
-        >
-          <LogOut className="size-3.5" /> Çıkış
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={temaDegistir}
+            aria-label={tema === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç'}
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            {tema === 'dark' ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={cikisYap}
+            className="flex items-center gap-1 text-[11.5px] text-muted-foreground hover:text-foreground"
+          >
+            <LogOut className="size-3.5" /> Çıkış
+          </button>
+        </div>
       </div>
     </aside>
   )

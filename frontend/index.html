@@ -5,6 +5,17 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Belediye AI Asistanı</title>
+    <script>
+      // React yuklenmeden ONCE calisir - aksi halde sayfa once acik temayla
+      // cizilip bir an sonra koyu temaya gecerken goze batan bir "yanip
+      // sonme" (flash) olur. localStorage'da kayitli tercih yoksa isletim
+      // sisteminin tercihine bakilir.
+      (function () {
+        var kayitli = localStorage.getItem('tema');
+        var koyu = kayitli ? kayitli === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (koyu) document.documentElement.classList.add('dark');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
