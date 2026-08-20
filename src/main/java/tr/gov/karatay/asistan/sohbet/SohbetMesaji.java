@@ -60,6 +60,20 @@ public class SohbetMesaji {
     @Column(name = "yapisal_veri", columnDefinition = "TEXT")
     private String yapisalVeri;
 
+    // Mesaja ozel, gecici bir ek (gorsel/PDF) - kalici RAG doküman havuzuna
+    // (Dokuman/vector_store) DAHIL DEGIL, sadece bu mesajin Gemini'ye
+    // multimodal icerik olarak gonderilmesi ve gecmiste tekrar goruntulenmesi
+    // icin. @Lob KULLANILMADI: Hibernate 6.x'te duz byte[] alani PostgreSQL'de
+    // doğrudan bytea'ya eslenir (oid/large-object degil).
+    @Column(name = "ek_veri")
+    private byte[] ekVeri;
+
+    @Column(name = "ek_mime_tipi", length = 100)
+    private String ekMimeTipi;
+
+    @Column(name = "ek_dosya_adi", length = 255)
+    private String ekDosyaAdi;
+
     @Column(name = "olusturma_tarihi", nullable = false)
     private LocalDateTime olusturmaTarihi;
 }

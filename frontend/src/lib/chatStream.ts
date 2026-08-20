@@ -1,24 +1,41 @@
 import type { ChatStreamEvent, SohbetModu } from '@/types/chat'
 
+function dosyaliGovdeOlustur(istek: { conversationId: string | null; mesaj: string; mod: SohbetModu; dosya?: File }) {
+  const form = new FormData()
+  if (istek.conversationId) form.append('conversationId', istek.conversationId)
+  form.append('mesaj', istek.mesaj)
+  form.append('mod', istek.mod)
+  if (istek.dosya) form.append('dosya', istek.dosya)
+  return form
+}
+
 interface StreamChatRequest {
   conversationId: string | null
   mesaj: string
   mod: SohbetModu
+  dosya?: File
 }
 
 /**
  * POST /api/chat/stream bir SSE gövdesi döndürüyor. Native EventSource sadece
  * GET destekler, bu yüzden akışı fetch + ReadableStream ile elle ayrıştırıyoruz.
+ * `dosya` varsa istek gövdesi FormData olur (backend'deki ayrı multipart
+ * handler'a düşer, bkz. ChatController.chatStreamEkli) - Content-Type header'ı
+ * elle set edilmez, tarayıcı multipart sınırını kendi ekler (dokumanlar.ts'teki
+ * dokumanYukle ile ayni desen). SSE ayrıştırma döngüsü istek gövdesinden
+ * bağımsız, hiç değişmedi.
  */
 export async function streamChat(
   istek: StreamChatRequest,
   onEvent: (event: ChatStreamEvent) => void,
 ): Promise<void> {
-  const yanit = await fetch('/api/chat/stream', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(istek),
-  })
+  const yanit = istek.dosya
+    ? await fetch('/api/chat/stream', { method: 'POST', body: dosyaliGovdeOlustur(istek) })
+    : await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: istek.conversationId, mesaj: istek.mesaj, mod: istek.mod }),
+      })
 
   if (!yanit.ok || !yanit.body) {
     throw new Error(`İstek başarısız oldu (HTTP ${yanit.status})`)

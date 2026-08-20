@@ -21,9 +21,9 @@ function AnaLayout() {
     })
   }
 
-  async function gonder(mesaj: string) {
+  async function gonder(mesaj: string, dosya?: File) {
     enAltaKaydir()
-    await mesajGonder(mesaj)
+    await mesajGonder(mesaj, dosya)
   }
 
   useEffect(() => {

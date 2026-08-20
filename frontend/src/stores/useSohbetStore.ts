@@ -3,7 +3,7 @@ import { streamChat } from '@/lib/chatStream'
 import { sohbetleriGetir, sohbetMesajlariniGetir } from '@/lib/sohbetler'
 import type { ChatMessage, SohbetMesajOzeti, SohbetModu, SohbetOzeti } from '@/types/chat'
 
-function mesajOzetindenChatMesaji(m: SohbetMesajOzeti): ChatMessage {
+function mesajOzetindenChatMesaji(m: SohbetMesajOzeti, sohbetId: string): ChatMessage {
   return {
     id: crypto.randomUUID(),
     role: m.rol === 'KULLANICI' ? 'kullanici' : 'asistan',
@@ -12,6 +12,13 @@ function mesajOzetindenChatMesaji(m: SohbetMesajOzeti): ChatMessage {
     araclar: m.araclar ?? undefined,
     bekleyenIslem: m.bekleyenIslem ?? undefined,
     yapisalVeri: m.yapisalVeri ?? undefined,
+    ek: m.ekMimeTipi
+      ? {
+          url: `/api/sohbetler/${sohbetId}/mesajlar/${m.id}/ek`,
+          mimeTipi: m.ekMimeTipi,
+          dosyaAdi: m.ekDosyaAdi ?? 'ek',
+        }
+      : undefined,
   }
 }
 
@@ -28,7 +35,7 @@ interface SohbetStore {
   yeniKonusma: (mod?: SohbetModu) => void
   modDegistir: (mod: SohbetModu) => void
   sohbetSec: (id: string) => Promise<void>
-  mesajGonder: (mesaj: string) => Promise<void>
+  mesajGonder: (mesaj: string, dosya?: File) => Promise<void>
 }
 
 export const useSohbetStore = create<SohbetStore>((set, get) => ({
@@ -71,15 +78,20 @@ export const useSohbetStore = create<SohbetStore>((set, get) => ({
       set({
         aktifSohbetId: id,
         aktifMod: bulunanSohbet?.mod ?? 'GENEL',
-        mesajlar: mesajlar.map(mesajOzetindenChatMesaji),
+        mesajlar: mesajlar.map((m) => mesajOzetindenChatMesaji(m, id)),
       })
     } finally {
       set({ gecmisYukleniyor: false })
     }
   },
 
-  async mesajGonder(mesaj) {
-    const kullaniciMesaji: ChatMessage = { id: crypto.randomUUID(), role: 'kullanici', content: mesaj }
+  async mesajGonder(mesaj, dosya) {
+    const kullaniciMesaji: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'kullanici',
+      content: mesaj,
+      ek: dosya ? { url: URL.createObjectURL(dosya), mimeTipi: dosya.type, dosyaAdi: dosya.name } : undefined,
+    }
     const asistanId = crypto.randomUUID()
     const { aktifSohbetId, aktifMod } = get()
 
@@ -90,7 +102,7 @@ export const useSohbetStore = create<SohbetStore>((set, get) => ({
     }))
 
     try {
-      await streamChat({ conversationId: aktifSohbetId, mesaj, mod: aktifMod }, (olay) => {
+      await streamChat({ conversationId: aktifSohbetId, mesaj, mod: aktifMod, dosya }, (olay) => {
         if (olay.type === 'conversationId') {
           set({ aktifSohbetId: olay.conversationId })
           return

@@ -1,16 +1,22 @@
 package tr.gov.karatay.asistan.chat;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.content.Media;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
+import org.springframework.util.MimeTypeUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,6 +33,7 @@ import tr.gov.karatay.asistan.common.enums.SohbetModu;
 import tr.gov.karatay.asistan.config.ChatClientConfig;
 import tr.gov.karatay.asistan.rag.RagTools;
 import tr.gov.karatay.asistan.sohbet.SohbetService;
+import tr.gov.karatay.asistan.sohbet.dto.EkVerisi;
 import tr.gov.karatay.asistan.talep.PendingActionService;
 import tr.gov.karatay.asistan.talep.TalepTools;
 import tr.gov.karatay.asistan.talep.dto.PendingActionOzeti;
@@ -35,6 +42,15 @@ import tr.gov.karatay.asistan.talep.dto.PendingActionOzeti;
 public class ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
+
+    // Sohbete eklenen dosya (gorsel/PDF) kalici RAG doküman havuzuna
+    // (Dokuman/vector_store) DAHIL EDILMEZ - sadece bu mesajin Gemini'ye
+    // multimodal icerik olarak gonderilmesi icindir (bkz. ekIcerigiHazirla).
+    // Global multipart siniri (application.yml) 25MB'dir; burasi Gemini'ye
+    // inline gonderilen icerik icin daha siki bir is kurali siniri uygular.
+    private static final Set<String> IZIN_VERILEN_EK_TURLERI =
+            Set.of("image/jpeg", "image/png", "image/webp", "application/pdf");
+    private static final long EK_MAKS_BOYUT_BYTE = 8L * 1024 * 1024;
 
     // Onceden, kucuk yerel modelin (qwen2.5:7b) belgesiz mevzuat sorularinda
     // hafizasindan halusinasyon uretmesini engellemek icin mesaja zorla bir
@@ -78,6 +94,10 @@ public class ChatService {
     }
 
     public ChatResponse yanitla(ChatRequest istek, Long personelId) {
+        return yanitla(istek, personelId, null);
+    }
+
+    public ChatResponse yanitla(ChatRequest istek, Long personelId, MultipartFile dosya) {
         SohbetModu mod = modCoz(istek.mod());
         String conversationId = sohbetIdCoz(istek.conversationId(), personelId, mod);
         List<String> bekleyenIslemIdleri = new ArrayList<>();
@@ -85,13 +105,22 @@ public class ChatService {
         List<YapisalVeriPaketi> yapisalVeriListesi = new ArrayList<>();
         List<Kaynak> kaynakListesi = new ArrayList<>();
 
-        sohbetService.mesajEkle(conversationId, MesajRolu.KULLANICI, istek.mesaj(), null, null, null, null);
+        EkIcerik ekIcerik = ekIcerigiHazirla(dosya);
+        sohbetService.mesajEkle(
+                conversationId,
+                MesajRolu.KULLANICI,
+                istek.mesaj(),
+                null,
+                null,
+                null,
+                null,
+                ekIcerik == null ? null : ekIcerik.kayit());
 
         // .system(...) SADECE GENEL disi modlarda cagirilir: Spring AI'de bu
         // metot cagrilirsa builder'daki defaultSystem'i o istek icin
         // DEGISTIRIR - hicbir zaman "bos" bir Consumer ile cagirmiyoruz,
         // aksi halde GENEL modun ana sistem promptu kaybolabilir.
-        ChatClient.ChatClientRequestSpec istekSpec = chatClient.prompt().user(istek.mesaj());
+        ChatClient.ChatClientRequestSpec istekSpec = chatClient.prompt().user(us -> kullaniciMesajiOlustur(us, istek.mesaj(), ekIcerik));
         String promptOverride = sistemPromptuOverride(mod);
         if (promptOverride != null) {
             istekSpec = istekSpec.system(promptOverride);
@@ -127,6 +156,10 @@ public class ChatService {
     }
 
     public Flux<ServerSentEvent<String>> akisliYanitla(ChatRequest istek, Long personelId) {
+        return akisliYanitla(istek, personelId, null);
+    }
+
+    public Flux<ServerSentEvent<String>> akisliYanitla(ChatRequest istek, Long personelId, MultipartFile dosya) {
         // Izin, Flux insa edilmeden ONCE senkron olarak alinir: Flux'lar tembel
         // (lazy) kuruldugu icin, izinAl() burada degil de bir Flux operatoru
         // icinde cagrilsaydi, hemen firlatilan bir CokFazlaIstekException yerine
@@ -147,12 +180,22 @@ public class ChatService {
         List<Kaynak> kaynakListesi = new ArrayList<>();
         StringBuilder birikenMetin = new StringBuilder();
 
-        sohbetService.mesajEkle(conversationId, MesajRolu.KULLANICI, istek.mesaj(), null, null, null, null);
+        EkIcerik ekIcerik = ekIcerigiHazirla(dosya);
+        sohbetService.mesajEkle(
+                conversationId,
+                MesajRolu.KULLANICI,
+                istek.mesaj(),
+                null,
+                null,
+                null,
+                null,
+                ekIcerik == null ? null : ekIcerik.kayit());
 
         Flux<ServerSentEvent<String>> conversationIdOlayi = Flux.just(
                 ServerSentEvent.builder(conversationId).event("conversationId").build());
 
-        ChatClient.ChatClientRequestSpec akisIstekSpec = chatClient.prompt().user(istek.mesaj());
+        ChatClient.ChatClientRequestSpec akisIstekSpec =
+                chatClient.prompt().user(us -> kullaniciMesajiOlustur(us, istek.mesaj(), ekIcerik));
         String akisPromptOverride = sistemPromptuOverride(mod);
         if (akisPromptOverride != null) {
             akisIstekSpec = akisIstekSpec.system(akisPromptOverride);
@@ -291,6 +334,47 @@ public class ChatService {
                 .getir(bekleyenIslemIdleri.get(0))
                 .map(a -> new PendingActionOzeti(a.id(), a.tur(), a.takipNo(), a.aciklama()))
                 .orElse(null);
+    }
+
+    // Media + EkVerisi'yi bir arada tasir: Media LLM'e gonderilecek multimodal
+    // icerik, EkVerisi ayni baytlarin sohbet_mesaji'na kalici kaydi (gecmiste
+    // tekrar goruntulenebilmesi icin) - ikisi de dosya.getBytes() tek sefer
+    // okunarak kurulur.
+    private record EkIcerik(Media media, EkVerisi kayit) {
+    }
+
+    private EkIcerik ekIcerigiHazirla(MultipartFile dosya) {
+        if (dosya == null || dosya.isEmpty()) {
+            return null;
+        }
+        String mimeTipi = dosya.getContentType();
+        if (mimeTipi == null || !IZIN_VERILEN_EK_TURLERI.contains(mimeTipi)) {
+            throw new IllegalArgumentException(
+                    "Desteklenmeyen dosya türü: %s. İzin verilenler: JPEG/PNG/WEBP görsel veya PDF."
+                            .formatted(mimeTipi));
+        }
+        if (dosya.getSize() > EK_MAKS_BOYUT_BYTE) {
+            throw new IllegalArgumentException("Dosya boyutu 8MB sınırını aşıyor.");
+        }
+        byte[] veri;
+        try {
+            veri = dosya.getBytes();
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Dosya okunamadı.", e);
+        }
+        Media media = Media.builder()
+                .mimeType(MimeTypeUtils.parseMimeType(mimeTipi))
+                .data(new ByteArrayResource(veri))
+                .name(dosya.getOriginalFilename())
+                .build();
+        return new EkIcerik(media, new EkVerisi(veri, mimeTipi, dosya.getOriginalFilename()));
+    }
+
+    private void kullaniciMesajiOlustur(ChatClient.PromptUserSpec us, String mesaj, EkIcerik ekIcerik) {
+        us.text(mesaj == null ? "" : mesaj);
+        if (ekIcerik != null) {
+            us.media(ekIcerik.media());
+        }
     }
 
     private String metniCikar(ChatClientResponse yanit) {

@@ -2,6 +2,7 @@ import { FileText, Globe, User, Wrench } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import karatayMark from '@/assets/karatay-mark.png'
 import { BekleyenIslemKarti } from '@/components/chat/BekleyenIslemKarti'
+import { EkOnizleme } from '@/components/chat/EkOnizleme'
 import { YapisalVeriKarti } from '@/components/chat/YapisalVeriKarti'
 import { cn } from '@/lib/utils'
 import type { ChatMessage, Kaynak } from '@/types/chat'
@@ -86,6 +87,7 @@ export function MessageBubble({ message, streaming }: MessageBubbleProps) {
 
       {kullaniciMi ? (
         <div className="rounded-2xl rounded-tr-sm bg-muted px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap text-foreground">
+          {message.ek && <EkOnizleme ek={message.ek} />}
           {message.content}
         </div>
       ) : (

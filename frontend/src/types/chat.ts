@@ -28,6 +28,15 @@ export interface BekleyenIslem {
   aciklama: string
 }
 
+// "url" hem yerel (gonderim aninda URL.createObjectURL(dosya)) hem sunucudan
+// (gecmis yuklendiginde /api/sohbetler/{sohbetId}/mesajlar/{id}/ek) gelebilir
+// - EkOnizleme/MessageBubble baytlarin nereden geldigiyle ilgilenmez.
+export interface EkOnizleme {
+  url: string
+  mimeTipi: string
+  dosyaAdi: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'kullanici' | 'asistan'
@@ -36,6 +45,7 @@ export interface ChatMessage {
   bekleyenIslem?: BekleyenIslem
   araclar?: string[]
   yapisalVeri?: YapisalVeriPaketi
+  ek?: EkOnizleme
 }
 
 export type ChatStreamEvent =
@@ -54,11 +64,14 @@ export interface SohbetOzeti {
 }
 
 export interface SohbetMesajOzeti {
+  id: number
   rol: 'KULLANICI' | 'ASISTAN'
   icerik: string
   kaynaklar: Kaynak[] | null
   araclar: string[] | null
   bekleyenIslem: BekleyenIslem | null
   yapisalVeri: YapisalVeriPaketi | null
+  ekMimeTipi: string | null
+  ekDosyaAdi: string | null
   olusturmaTarihi: string
 }

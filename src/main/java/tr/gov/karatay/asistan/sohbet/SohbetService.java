@@ -16,6 +16,7 @@ import tr.gov.karatay.asistan.chat.dto.YapisalVeriPaketi;
 import tr.gov.karatay.asistan.common.enums.MesajRolu;
 import tr.gov.karatay.asistan.common.enums.SohbetModu;
 import tr.gov.karatay.asistan.personel.PersonelRepository;
+import tr.gov.karatay.asistan.sohbet.dto.EkVerisi;
 import tr.gov.karatay.asistan.sohbet.dto.SohbetMesajOzeti;
 import tr.gov.karatay.asistan.sohbet.dto.SohbetOzeti;
 import tr.gov.karatay.asistan.talep.dto.PendingActionOzeti;
@@ -80,6 +81,19 @@ public class SohbetService {
             List<String> araclar,
             PendingActionOzeti bekleyenIslem,
             YapisalVeriPaketi yapisalVeri) {
+        mesajEkle(sohbetId, rol, icerik, kaynaklar, araclar, bekleyenIslem, yapisalVeri, null);
+    }
+
+    @Transactional
+    public void mesajEkle(
+            String sohbetId,
+            MesajRolu rol,
+            String icerik,
+            List<Kaynak> kaynaklar,
+            List<String> araclar,
+            PendingActionOzeti bekleyenIslem,
+            YapisalVeriPaketi yapisalVeri,
+            EkVerisi ek) {
         Sohbet sohbet = sohbetRepository
                 .findById(sohbetId)
                 .orElseThrow(() -> new IllegalArgumentException("\"%s\" id'li sohbet bulunamadı.".formatted(sohbetId)));
@@ -92,6 +106,11 @@ public class SohbetService {
         mesaj.setAraclar(yaz(araclar));
         mesaj.setBekleyenIslem(yaz(bekleyenIslem));
         mesaj.setYapisalVeri(yaz(yapisalVeri));
+        if (ek != null) {
+            mesaj.setEkVeri(ek.veri());
+            mesaj.setEkMimeTipi(ek.mimeTipi());
+            mesaj.setEkDosyaAdi(ek.dosyaAdi());
+        }
         mesaj.setOlusturmaTarihi(LocalDateTime.now());
         sohbetMesajiRepository.save(mesaj);
 
@@ -100,6 +119,18 @@ public class SohbetService {
         }
         sohbet.setGuncellemeTarihi(LocalDateTime.now());
         sohbetRepository.save(sohbet);
+    }
+
+    @Transactional(readOnly = true)
+    public EkVerisi ekGetir(String sohbetId, Long mesajId, Long personelId) {
+        sahiplikDogrula(sohbetId, personelId);
+        SohbetMesaji mesaj = sohbetMesajiRepository
+                .findByIdAndSohbetId(mesajId, sohbetId)
+                .orElseThrow(() -> new IllegalArgumentException("\"%d\" id'li mesaj bulunamadı.".formatted(mesajId)));
+        if (mesaj.getEkVeri() == null) {
+            throw new IllegalArgumentException("\"%d\" id'li mesajda ek bulunmuyor.".formatted(mesajId));
+        }
+        return new EkVerisi(mesaj.getEkVeri(), mesaj.getEkMimeTipi(), mesaj.getEkDosyaAdi());
     }
 
     private void sahiplikDogrula(String sohbetId, Long personelId) {
@@ -115,12 +146,15 @@ public class SohbetService {
 
     private SohbetMesajOzeti ozetleVer(SohbetMesaji mesaj) {
         return new SohbetMesajOzeti(
+                mesaj.getId(),
                 mesaj.getRol(),
                 mesaj.getIcerik(),
                 oku(mesaj.getKaynaklar(), new TypeReference<List<Kaynak>>() {}),
                 oku(mesaj.getAraclar(), new TypeReference<List<String>>() {}),
                 oku(mesaj.getBekleyenIslem(), new TypeReference<PendingActionOzeti>() {}),
                 oku(mesaj.getYapisalVeri(), new TypeReference<YapisalVeriPaketi>() {}),
+                mesaj.getEkMimeTipi(),
+                mesaj.getEkDosyaAdi(),
                 mesaj.getOlusturmaTarihi());
     }
 
