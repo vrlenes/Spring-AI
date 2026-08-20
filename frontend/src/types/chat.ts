@@ -1,3 +1,5 @@
+export type SohbetModu = 'GENEL' | 'TALEP'
+
 export interface Kaynak {
   baslik: string
   parcaNo: number
@@ -28,3 +30,19 @@ export type ChatStreamEvent =
   | { type: 'kaynaklar'; kaynaklar: Kaynak[] }
   | { type: 'bekleyenIslem'; bekleyenIslem: BekleyenIslem }
   | { type: 'araclar'; araclar: string[] }
+
+export interface SohbetOzeti {
+  id: string
+  mod: SohbetModu
+  baslik: string | null
+  guncellemeTarihi: string
+}
+
+export interface SohbetMesajOzeti {
+  rol: 'KULLANICI' | 'ASISTAN'
+  icerik: string
+  kaynaklar: Kaynak[] | null
+  araclar: string[] | null
+  bekleyenIslem: BekleyenIslem | null
+  olusturmaTarihi: string
+}

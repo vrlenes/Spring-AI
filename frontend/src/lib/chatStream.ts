@@ -1,8 +1,9 @@
-import type { ChatStreamEvent } from '@/types/chat'
+import type { ChatStreamEvent, SohbetModu } from '@/types/chat'
 
 interface StreamChatRequest {
   conversationId: string | null
   mesaj: string
+  mod: SohbetModu
 }
 
 /**

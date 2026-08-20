@@ -3,7 +3,6 @@ package tr.gov.karatay.asistan.chat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +26,10 @@ import tr.gov.karatay.asistan.chat.dto.ChatResponse;
 import tr.gov.karatay.asistan.chat.dto.Kaynak;
 import tr.gov.karatay.asistan.common.CokFazlaIstekException;
 import tr.gov.karatay.asistan.common.LlmEsZamanliSinirlayici;
+import tr.gov.karatay.asistan.common.enums.MesajRolu;
+import tr.gov.karatay.asistan.common.enums.SohbetModu;
+import tr.gov.karatay.asistan.config.ChatClientConfig;
+import tr.gov.karatay.asistan.sohbet.SohbetService;
 import tr.gov.karatay.asistan.talep.PendingActionService;
 import tr.gov.karatay.asistan.talep.TalepTools;
 import tr.gov.karatay.asistan.talep.dto.PendingActionOzeti;
@@ -52,6 +55,7 @@ public class ChatService {
     private final VectorStore vectorStore;
     private final QuestionAnswerAdvisor questionAnswerAdvisor;
     private final PendingActionService pendingActionService;
+    private final SohbetService sohbetService;
     private final ObjectMapper objectMapper;
     private final LlmEsZamanliSinirlayici llmSinirlayici;
     private final int topK;
@@ -62,6 +66,7 @@ public class ChatService {
             VectorStore vectorStore,
             QuestionAnswerAdvisor questionAnswerAdvisor,
             PendingActionService pendingActionService,
+            SohbetService sohbetService,
             ObjectMapper objectMapper,
             LlmEsZamanliSinirlayici llmSinirlayici,
             @Value("${asistan.rag.top-k}") int topK,
@@ -70,20 +75,31 @@ public class ChatService {
         this.vectorStore = vectorStore;
         this.questionAnswerAdvisor = questionAnswerAdvisor;
         this.pendingActionService = pendingActionService;
+        this.sohbetService = sohbetService;
         this.objectMapper = objectMapper;
         this.llmSinirlayici = llmSinirlayici;
         this.topK = topK;
         this.benzerlikEsigi = benzerlikEsigi;
     }
 
-    public ChatResponse yanitla(ChatRequest istek) {
-        String conversationId = conversationIdCoz(istek.conversationId());
-        List<Kaynak> kaynaklar = ilgiliKaynaklariBul(istek.mesaj());
+    public ChatResponse yanitla(ChatRequest istek, Long personelId) {
+        SohbetModu mod = modCoz(istek.mod());
+        String conversationId = sohbetIdCoz(istek.conversationId(), personelId, mod);
+        List<Kaynak> kaynaklar = kaynaklarBul(istek.mesaj(), mod);
         List<String> bekleyenIslemIdleri = new ArrayList<>();
         List<String> kullanilanAraclar = new ArrayList<>();
 
-        ChatClientResponse yanit = llmSinirlayici.sinirliCagir(() -> chatClient.prompt()
-                .user(istek.mesaj())
+        sohbetService.mesajEkle(conversationId, MesajRolu.KULLANICI, istek.mesaj(), null, null, null);
+
+        // .system(...) SADECE TALEP modundayken cagirilir: Spring AI'de bu
+        // metot cagrilirsa builder'daki defaultSystem'i o istek icin
+        // DEGISTIRIR - hicbir zaman "bos" bir Consumer ile cagirmiyoruz,
+        // aksi halde GENEL modun ana sistem promptu kaybolabilir.
+        ChatClient.ChatClientRequestSpec istekSpec = chatClient.prompt().user(istek.mesaj());
+        if (mod == SohbetModu.TALEP) {
+            istekSpec = istekSpec.system(ChatClientConfig.TALEP_MODU_SISTEM_PROMPTU);
+        }
+        final ChatClient.ChatClientRequestSpec sonIstekSpec = istekSpec
                 .toolContext(Map.of(
                         TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri,
                         TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar))
@@ -92,25 +108,27 @@ public class ChatService {
                     if (!kaynaklar.isEmpty()) {
                         a.advisors(questionAnswerAdvisor);
                     }
-                })
-                .call()
-                .chatClientResponse());
+                });
+
+        ChatClientResponse yanit =
+                llmSinirlayici.sinirliCagir(() -> sonIstekSpec.call().chatClientResponse());
+
+        String cevapMetni = metniCikar(yanit);
+        List<String> araclar = benzersiz(kullanilanAraclar);
+        PendingActionOzeti bekleyenIslem = bekleyenIslemBul(bekleyenIslemIdleri);
+        sohbetService.mesajEkle(conversationId, MesajRolu.ASISTAN, cevapMetni, bosMu(kaynaklar), bosMu(araclar), bekleyenIslem);
 
         log.info(
-                "Sohbet yaniti uretildi: conversationId={}, kaynakSayisi={}, kullanilanArac={}",
+                "Sohbet yaniti uretildi: conversationId={}, mod={}, kaynakSayisi={}, kullanilanArac={}",
                 conversationId,
+                mod,
                 kaynaklar.size(),
-                benzersiz(kullanilanAraclar));
+                araclar);
 
-        return new ChatResponse(
-                conversationId,
-                metniCikar(yanit),
-                kaynaklar,
-                bekleyenIslemBul(bekleyenIslemIdleri),
-                benzersiz(kullanilanAraclar));
+        return new ChatResponse(conversationId, cevapMetni, kaynaklar, bekleyenIslem, araclar);
     }
 
-    public Flux<ServerSentEvent<String>> akisliYanitla(ChatRequest istek) {
+    public Flux<ServerSentEvent<String>> akisliYanitla(ChatRequest istek, Long personelId) {
         // Izin, Flux insa edilmeden ONCE senkron olarak alinir: Flux'lar tembel
         // (lazy) kuruldugu icin, izinAl() burada degil de bir Flux operatoru
         // icinde cagrilsaydi, hemen firlatilan bir CokFazlaIstekException yerine
@@ -123,16 +141,24 @@ public class ChatService {
                     "Sistem şu anda başka isteklerle meşgul, lütfen birkaç saniye sonra tekrar deneyin.");
         }
 
-        String conversationId = conversationIdCoz(istek.conversationId());
-        List<Kaynak> kaynaklar = ilgiliKaynaklariBul(istek.mesaj());
+        SohbetModu mod = modCoz(istek.mod());
+        String conversationId = sohbetIdCoz(istek.conversationId(), personelId, mod);
+        List<Kaynak> kaynaklar = kaynaklarBul(istek.mesaj(), mod);
         List<String> bekleyenIslemIdleri = new ArrayList<>();
         List<String> kullanilanAraclar = new ArrayList<>();
+        StringBuilder birikenMetin = new StringBuilder();
+
+        sohbetService.mesajEkle(conversationId, MesajRolu.KULLANICI, istek.mesaj(), null, null, null);
 
         Flux<ServerSentEvent<String>> conversationIdOlayi = Flux.just(
                 ServerSentEvent.builder(conversationId).event("conversationId").build());
 
-        Flux<ServerSentEvent<String>> tokenOlaylari = chatClient.prompt()
-                .user(istek.mesaj())
+        ChatClient.ChatClientRequestSpec akisIstekSpec = chatClient.prompt().user(istek.mesaj());
+        if (mod == SohbetModu.TALEP) {
+            akisIstekSpec = akisIstekSpec.system(ChatClientConfig.TALEP_MODU_SISTEM_PROMPTU);
+        }
+
+        Flux<ServerSentEvent<String>> tokenOlaylari = akisIstekSpec
                 .toolContext(Map.of(
                         TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri,
                         TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar))
@@ -146,9 +172,11 @@ public class ChatService {
                 .chatClientResponse()
                 .mapNotNull(yanit -> {
                     String parca = metniCikar(yanit);
-                    return (parca == null || parca.isEmpty())
-                            ? null
-                            : ServerSentEvent.builder(parca).event("token").build();
+                    if (parca == null || parca.isEmpty()) {
+                        return null;
+                    }
+                    birikenMetin.append(parca);
+                    return ServerSentEvent.builder(parca).event("token").build();
                 });
 
         Flux<ServerSentEvent<String>> kaynakOlayi = Flux.defer(() -> {
@@ -192,13 +220,44 @@ public class ChatService {
         return Flux.concat(conversationIdOlayi, tokenOlaylari, kaynakOlayi, bekleyenIslemOlayi, araclarOlayi)
                 .doFinally(sinyal -> {
                     llmSinirlayici.izinBirak();
+                    List<String> araclar = benzersiz(kullanilanAraclar);
+                    PendingActionOzeti bekleyenIslem = bekleyenIslemBul(bekleyenIslemIdleri);
+                    if (!birikenMetin.isEmpty()) {
+                        sohbetService.mesajEkle(
+                                conversationId,
+                                MesajRolu.ASISTAN,
+                                birikenMetin.toString(),
+                                bosMu(kaynaklar),
+                                bosMu(araclar),
+                                bekleyenIslem);
+                    }
                     log.info(
-                            "Akisli sohbet yaniti tamamlandi: conversationId={}, kaynakSayisi={}, kullanilanArac={}, sinyal={}",
+                            "Akisli sohbet yaniti tamamlandi: conversationId={}, mod={}, kaynakSayisi={}, kullanilanArac={}, sinyal={}",
                             conversationId,
+                            mod,
                             kaynaklar.size(),
-                            benzersiz(kullanilanAraclar),
+                            araclar,
                             sinyal);
                 });
+    }
+
+    private SohbetModu modCoz(SohbetModu istekteki) {
+        return istekteki == null ? SohbetModu.GENEL : istekteki;
+    }
+
+    private String sohbetIdCoz(String istekteki, Long personelId, SohbetModu mod) {
+        if (istekteki != null && !istekteki.isBlank()) {
+            return istekteki;
+        }
+        return sohbetService.sohbetBaslat(personelId, mod).getId();
+    }
+
+    private List<Kaynak> kaynaklarBul(String mesaj, SohbetModu mod) {
+        return mod == SohbetModu.TALEP ? List.of() : ilgiliKaynaklariBul(mesaj);
+    }
+
+    private <T> List<T> bosMu(List<T> liste) {
+        return liste.isEmpty() ? null : liste;
     }
 
     private List<String> benzersiz(List<String> liste) {
@@ -237,9 +296,5 @@ public class ChatService {
             return null;
         }
         return cevap.getResult().getOutput().getText();
-    }
-
-    private String conversationIdCoz(String istekteki) {
-        return (istekteki == null || istekteki.isBlank()) ? UUID.randomUUID().toString() : istekteki;
     }
 }
