@@ -1,4 +1,4 @@
-import { ClipboardList, Sparkles, type LucideIcon } from 'lucide-react'
+import { Building2, ClipboardList, FileCheck2, Sparkles, type LucideIcon } from 'lucide-react'
 import karatayLogo from '@/assets/karatay-logo.png'
 import { cn } from '@/lib/utils'
 import { useSohbetStore } from '@/stores/useSohbetStore'
@@ -6,7 +6,6 @@ import type { SohbetModu } from '@/types/chat'
 
 const MEVZUAT_SORULARI = [
   'Resmi yazışmalarda imza yetkisi kime aittir?',
-  'İmar planlarında kim yetkilidir?',
   'Belediyenin görev ve sorumlulukları nelerdir?',
 ]
 
@@ -15,6 +14,18 @@ const TALEP_ORNEKLERI = [
   'Fen İşleri Müdürlüğü ile ilgili talepleri göster',
   'Başıboş hayvan şikayetlerini ara',
   'Son 30 gündeki talep istatistiklerini göster',
+]
+
+const IMAR_ORNEKLERI = [
+  'Yapı ruhsatı almak için hangi belgeler gereklidir?',
+  'İmar planında ada ve parsel nasıl belirlenir?',
+  'Yapı kullanma izni ne zaman alınır?',
+]
+
+const RUHSAT_ORNEKLERI = [
+  'İşyeri açma ruhsatı için hangi belgeler gerekir?',
+  'Sıhhi müessese ile gayrisıhhi müessese arasındaki fark nedir?',
+  'Ruhsat başvurusu ne kadar sürede sonuçlanır?',
 ]
 
 interface ModKart {
@@ -35,6 +46,13 @@ const MODLAR: ModKart[] = [
     baslik: 'Talep',
     aciklama: 'Vatandaş taleplerini listeler, sınıflandırır, yönetir.',
     Icon: ClipboardList,
+  },
+  { mod: 'IMAR', baslik: 'İmar', aciklama: 'İmar kanunu ve yönetmeliklerine dair sorulara cevap verir.', Icon: Building2 },
+  {
+    mod: 'RUHSAT',
+    baslik: 'Ruhsat',
+    aciklama: 'İşyeri/yapı ruhsatı mevzuatına dair sorulara cevap verir.',
+    Icon: FileCheck2,
   },
 ]
 
@@ -105,10 +123,17 @@ interface EmptyStateProps {
   onSelect: (soru: string) => void
 }
 
+const ORNEK_LISTELERI: Record<SohbetModu, string[]> = {
+  GENEL: MEVZUAT_SORULARI,
+  TALEP: TALEP_ORNEKLERI,
+  IMAR: IMAR_ORNEKLERI,
+  RUHSAT: RUHSAT_ORNEKLERI,
+}
+
 export function EmptyState({ onSelect }: EmptyStateProps) {
   const aktifMod = useSohbetStore((s) => s.aktifMod)
-  const ornekler = aktifMod === 'GENEL' ? MEVZUAT_SORULARI : TALEP_ORNEKLERI
-  const ornekBaslik = aktifMod === 'GENEL' ? 'Örnek Sorular' : 'Örnek İstekler'
+  const ornekler = ORNEK_LISTELERI[aktifMod]
+  const ornekBaslik = aktifMod === 'TALEP' ? 'Örnek İstekler' : 'Örnek Sorular'
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">

@@ -1,4 +1,4 @@
-export type SohbetModu = 'GENEL' | 'TALEP'
+export type SohbetModu = 'GENEL' | 'TALEP' | 'IMAR' | 'RUHSAT'
 
 export interface Kaynak {
   baslik: string

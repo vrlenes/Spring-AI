@@ -34,6 +34,13 @@ public class Dokuman {
     @Column(length = 80)
     private String kategori;
 
+    // Hangi sohbet moduna ait oldugu (SohbetModu.name(), orn. "IMAR") - null/bos
+    // ise sadece GENEL modda aranir. RAG aramasi bu alana gore filtrelenir
+    // (bkz. ChatService) - her modun kendi belge havuzu olur, "derli toplu"
+    // hedefi icin.
+    @Column(length = 20)
+    private String mod;
+
     @Column(name = "yuklenme_tarihi", nullable = false)
     private LocalDateTime yuklenmeTarihi;
 

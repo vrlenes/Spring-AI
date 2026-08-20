@@ -3,6 +3,7 @@ export interface Dokuman {
   dosyaAdi: string
   baslik: string
   kategori: string | null
+  mod: string | null
   yuklenmeTarihi: string
   chunkSayisi: number
 }

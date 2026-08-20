@@ -24,10 +24,10 @@ export function SagPanel() {
     }
   }, [aktifMod])
 
-  if (aktifMod === 'GENEL') {
+  if (aktifMod !== 'TALEP') {
     return (
       <aside className="hidden w-72 shrink-0 flex-col border-l bg-muted/30 lg:flex">
-        <DokumanPanel />
+        <DokumanPanel mod={aktifMod} />
       </aside>
     )
   }

@@ -31,8 +31,9 @@ public class DokumanController {
     public ResponseEntity<DokumanOzeti> yukle(
             @RequestParam("dosya") MultipartFile dosya,
             @RequestParam("baslik") String baslik,
-            @RequestParam(value = "kategori", required = false) String kategori) {
-        Dokuman dokuman = dokumanIngestService.iceriAktar(dosya, baslik, kategori);
+            @RequestParam(value = "kategori", required = false) String kategori,
+            @RequestParam(value = "mod", required = false) String mod) {
+        Dokuman dokuman = dokumanIngestService.iceriAktar(dosya, baslik, kategori, mod);
         return ResponseEntity.status(HttpStatus.CREATED).body(ozetleVer(dokuman));
     }
 
@@ -53,6 +54,7 @@ public class DokumanController {
                 dokuman.getDosyaAdi(),
                 dokuman.getBaslik(),
                 dokuman.getKategori(),
+                dokuman.getMod(),
                 dokuman.getYuklenmeTarihi(),
                 dokuman.getChunkSayisi());
     }

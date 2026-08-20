@@ -7,6 +7,7 @@ public record DokumanOzeti(
         String dosyaAdi,
         String baslik,
         String kategori,
+        String mod,
         LocalDateTime yuklenmeTarihi,
         Integer chunkSayisi) {
 }

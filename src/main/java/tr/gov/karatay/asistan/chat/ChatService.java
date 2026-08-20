@@ -13,6 +13,8 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
@@ -93,13 +95,14 @@ public class ChatService {
 
         sohbetService.mesajEkle(conversationId, MesajRolu.KULLANICI, istek.mesaj(), null, null, null, null);
 
-        // .system(...) SADECE TALEP modundayken cagirilir: Spring AI'de bu
+        // .system(...) SADECE GENEL disi modlarda cagirilir: Spring AI'de bu
         // metot cagrilirsa builder'daki defaultSystem'i o istek icin
         // DEGISTIRIR - hicbir zaman "bos" bir Consumer ile cagirmiyoruz,
         // aksi halde GENEL modun ana sistem promptu kaybolabilir.
         ChatClient.ChatClientRequestSpec istekSpec = chatClient.prompt().user(istek.mesaj());
-        if (mod == SohbetModu.TALEP) {
-            istekSpec = istekSpec.system(ChatClientConfig.TALEP_MODU_SISTEM_PROMPTU);
+        String promptOverride = sistemPromptuOverride(mod);
+        if (promptOverride != null) {
+            istekSpec = istekSpec.system(promptOverride);
         }
         final ChatClient.ChatClientRequestSpec sonIstekSpec = istekSpec
                 .toolContext(Map.of(
@@ -160,8 +163,9 @@ public class ChatService {
                 ServerSentEvent.builder(conversationId).event("conversationId").build());
 
         ChatClient.ChatClientRequestSpec akisIstekSpec = chatClient.prompt().user(istek.mesaj());
-        if (mod == SohbetModu.TALEP) {
-            akisIstekSpec = akisIstekSpec.system(ChatClientConfig.TALEP_MODU_SISTEM_PROMPTU);
+        String akisPromptOverride = sistemPromptuOverride(mod);
+        if (akisPromptOverride != null) {
+            akisIstekSpec = akisIstekSpec.system(akisPromptOverride);
         }
 
         Flux<ServerSentEvent<String>> tokenOlaylari = akisIstekSpec
@@ -273,8 +277,32 @@ public class ChatService {
         return sohbetService.sohbetBaslat(personelId, mod).getId();
     }
 
+    private String sistemPromptuOverride(SohbetModu mod) {
+        return switch (mod) {
+            case GENEL -> null;
+            case TALEP -> ChatClientConfig.TALEP_MODU_SISTEM_PROMPTU;
+            case IMAR -> ChatClientConfig.IMAR_MODU_SISTEM_PROMPTU;
+            case RUHSAT -> ChatClientConfig.RUHSAT_MODU_SISTEM_PROMPTU;
+        };
+    }
+
     private List<Kaynak> kaynaklarBul(String mesaj, SohbetModu mod) {
-        return mod == SohbetModu.TALEP ? List.of() : ilgiliKaynaklariBul(mesaj);
+        return mod == SohbetModu.TALEP ? List.of() : ilgiliKaynaklariBul(mesaj, mod);
+    }
+
+    // GENEL modda sadece hicbir moda etiketlenmemis (paylasilan) belgeler
+    // aranir - IMAR/RUHSAT gibi ozel modlara etiketlenmis belgeler GENEL'de
+    // "gurultu" olmasin diye kapsam disinda tutulur (bkz. Dokuman.mod,
+    // DokumanIngestService). IMAR/RUHSAT modlarinda ise SADECE o moda ait
+    // belgeler aranir - her modun kendi izole belge havuzu olur.
+    private Filter.Expression modFiltresi(SohbetModu mod) {
+        FilterExpressionBuilder b = new FilterExpressionBuilder();
+        return switch (mod) {
+            case GENEL -> b.eq("mod", "").build();
+            case IMAR -> b.eq("mod", SohbetModu.IMAR.name()).build();
+            case RUHSAT -> b.eq("mod", SohbetModu.RUHSAT.name()).build();
+            case TALEP -> null;
+        };
     }
 
     private <T> List<T> bosMu(List<T> liste) {
@@ -295,14 +323,18 @@ public class ChatService {
                 .orElse(null);
     }
 
-    private List<Kaynak> ilgiliKaynaklariBul(String mesaj) {
-        SearchRequest aramaIstegi = SearchRequest.builder()
+    private List<Kaynak> ilgiliKaynaklariBul(String mesaj, SohbetModu mod) {
+        SearchRequest.Builder aramaIstegi = SearchRequest.builder()
                 .query(mesaj)
                 .topK(topK)
-                .similarityThreshold(benzerlikEsigi)
-                .build();
+                .similarityThreshold(benzerlikEsigi);
 
-        List<Document> belgeler = vectorStore.similaritySearch(aramaIstegi);
+        Filter.Expression filtre = modFiltresi(mod);
+        if (filtre != null) {
+            aramaIstegi.filterExpression(filtre);
+        }
+
+        List<Document> belgeler = vectorStore.similaritySearch(aramaIstegi.build());
         return belgeler.stream()
                 .map(belge -> new Kaynak(
                         String.valueOf(belge.getMetadata().getOrDefault("baslik", "Bilinmeyen belge")),

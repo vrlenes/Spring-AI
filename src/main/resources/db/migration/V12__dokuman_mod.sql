@@ -1,0 +1,1 @@
+ALTER TABLE dokuman ADD COLUMN mod VARCHAR(20);

@@ -2,9 +2,20 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'r
 import { FileText, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { dokumanSil, dokumanYukle, dokumanlariListele } from '@/lib/dokumanlar'
+import type { SohbetModu } from '@/types/chat'
 import type { Dokuman } from '@/types/dokuman'
 
-export function DokumanPanel() {
+interface DokumanPanelProps {
+  mod: SohbetModu
+}
+
+// Belgeler moda gore filtrelenir (bkz. backend Dokuman.mod, ChatService RAG
+// filtresi) - her modun kendi izole belge havuzu var, "derli toplu" hedefi
+// bunu hem RAG aramasinda hem burada gorsel olarak yansitir. GENEL modda
+// hicbir moda etiketlenmemis (paylasilan) belgeler gorunur; IMAR/RUHSAT'ta
+// sadece o moda ait belgeler. Yukleme de otomatik olarak aktif moda
+// etiketlenir - kullanicinin ayrica bir "hangi mod" secmesine gerek yok.
+export function DokumanPanel({ mod }: DokumanPanelProps) {
   const [dokumanlar, setDokumanlar] = useState<Dokuman[]>([])
   const [secilenDosya, setSecilenDosya] = useState<File | null>(null)
   const [baslik, setBaslik] = useState('')
@@ -43,7 +54,7 @@ export function DokumanPanel() {
 
     setYukleniyor(true)
     try {
-      await dokumanYukle(secilenDosya, baslik.trim(), kategori)
+      await dokumanYukle(secilenDosya, baslik.trim(), kategori, mod === 'GENEL' ? undefined : mod)
       formuKapat()
       await yenile()
     } catch {
@@ -62,6 +73,8 @@ export function DokumanPanel() {
       alert('Doküman silinirken bir hata oluştu.')
     }
   }
+
+  const gorunenDokumanlar = dokumanlar.filter((d) => (mod === 'GENEL' ? !d.mod : d.mod === mod))
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 py-3">
@@ -110,11 +123,11 @@ export function DokumanPanel() {
       )}
 
       <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
-        {dokumanlar.length === 0 && !secilenDosya && (
-          <p className="text-[11.5px] text-muted-foreground">Henüz doküman yüklenmedi.</p>
+        {gorunenDokumanlar.length === 0 && !secilenDosya && (
+          <p className="text-[11.5px] text-muted-foreground">Bu modda henüz doküman yüklenmedi.</p>
         )}
         <div className="flex flex-col gap-0.5">
-          {dokumanlar.map((dokuman) => (
+          {gorunenDokumanlar.map((dokuman) => (
             <div
               key={dokuman.id}
               className="group flex items-center gap-1.5 rounded px-1 py-1.5 text-[12px] hover:bg-muted/60"

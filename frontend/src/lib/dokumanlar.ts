@@ -8,12 +8,15 @@ export async function dokumanlariListele(): Promise<Dokuman[]> {
   return yanit.json()
 }
 
-export async function dokumanYukle(dosya: File, baslik: string, kategori: string): Promise<Dokuman> {
+export async function dokumanYukle(dosya: File, baslik: string, kategori: string, mod?: string): Promise<Dokuman> {
   const form = new FormData()
   form.append('dosya', dosya)
   form.append('baslik', baslik)
   if (kategori.trim()) {
     form.append('kategori', kategori)
+  }
+  if (mod) {
+    form.append('mod', mod)
   }
 
   const yanit = await fetch('/api/dokumanlar', { method: 'POST', body: form })

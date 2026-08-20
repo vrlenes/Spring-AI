@@ -32,7 +32,7 @@ public class DokumanIngestService {
     }
 
     @Transactional
-    public Dokuman iceriAktar(MultipartFile dosya, String baslik, String kategori) {
+    public Dokuman iceriAktar(MultipartFile dosya, String baslik, String kategori, String mod) {
         List<Document> hamBelgeler;
         try {
             TikaDocumentReader okuyucu = new TikaDocumentReader(dosya.getResource());
@@ -55,6 +55,7 @@ public class DokumanIngestService {
         dokuman.setDosyaAdi(dosya.getOriginalFilename());
         dokuman.setBaslik(baslik);
         dokuman.setKategori(kategori);
+        dokuman.setMod(mod);
         dokuman.setYuklenmeTarihi(LocalDateTime.now());
         dokuman.setChunkSayisi(parcalar.size());
         dokumanRepository.save(dokuman);
@@ -65,6 +66,7 @@ public class DokumanIngestService {
                     .metadata("dokumanId", dokuman.getId().toString())
                     .metadata("baslik", dokuman.getBaslik())
                     .metadata("kategori", dokuman.getKategori() == null ? "" : dokuman.getKategori())
+                    .metadata("mod", dokuman.getMod() == null ? "" : dokuman.getMod())
                     .metadata("dosyaAdi", dokuman.getDosyaAdi())
                     .metadata("chunkIndex", i)
                     .build());
