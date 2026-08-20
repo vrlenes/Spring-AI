@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
+import tr.gov.karatay.asistan.kurum.KurumDizinTools;
 import tr.gov.karatay.asistan.rag.RagTools;
 import tr.gov.karatay.asistan.talep.TalepTools;
 
@@ -34,8 +35,16 @@ public class ChatClientConfig {
                aracıyla arama yaparak cevaplamak.
             2. Vatandaş taleplerini listeleme, arama, sınıflandırma, müdürlüğe atama
                ve durum güncelleme işlemlerini araçlar (tools) aracılığıyla yapmak.
+            3. Müdürlük iletişim bilgisi (telefon, e-posta, adres) veya personel
+               dizininde arama (ad-soyad, unvan, müdürlük) sorularını
+               mudurlukIletisimGetir / personelAra araçlarıyla cevaplamak.
 
             KURALLAR:
+            - mudurlukIletisimGetir/personelAra "bulunamadı" döndürürse KESİNLİKLE
+              kendi bilginden bir telefon/e-posta/isim UYDURMA - sadece bulunamadığını
+              söyle. Bu, mevzuat sorularından FARKLI: mevzuatta genel bilgine
+              (açıkça belirterek) dönebilirsin, ama iletişim bilgisinde YANLIŞ bir
+              telefon/e-posta vermek gerçekten zararlı olabilir - asla riske girme.
             - Mevzuat/yönetmelik ile ilgili HER soruda önce belgeAra aracını çağır -
               kendi bilginden DOĞRUDAN cevap verme. Aracın döndürdüğü sonuç soruyu
               tam karşılamıyorsa veya alakasız görünüyorsa, FARKLI anahtar
@@ -257,11 +266,16 @@ public class ChatClientConfig {
     // istedigi kadar farkli sorguyla tekrar cagirabilir.
     @Bean
     @Primary
-    ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory, TalepTools talepTools, RagTools ragTools) {
+    ChatClient chatClient(
+            ChatClient.Builder builder,
+            ChatMemory chatMemory,
+            TalepTools talepTools,
+            RagTools ragTools,
+            KurumDizinTools kurumDizinTools) {
         return builder
                 .defaultSystem(SISTEM_PROMPT)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-                .defaultTools(talepTools, ragTools)
+                .defaultTools(talepTools, ragTools, kurumDizinTools)
                 .build();
     }
 }

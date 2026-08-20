@@ -9,6 +9,12 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Sadece TAZE bir pgdata volume'de ilk baslatmada calisir (Postgres'in
+      # kendi davranisi) - kurum_dizini adinda ikinci, ayri bir veritabani
+      # olusturur (mudurluk iletisim + personel dizini icin, bkz. kurum
+      # paketi). Zaten initialize olmus mevcut gelistirme ortaminda bu script
+      # calismaz - orada DB elle olusturulmustu.
+      - ./docker/initdb:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s

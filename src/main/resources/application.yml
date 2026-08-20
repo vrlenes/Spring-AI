@@ -55,6 +55,16 @@ spring:
         index-type: HNSW
         distance-type: COSINE_DISTANCE
 
+# Kurum dizini (mudurluk iletisim + personel dizini, bkz. kurum paketi ve
+# config/KurumDizinDataSourceConfig) - AYRI bir veritabani, ana uygulama
+# DB'sinden (spring.datasource) bagimsiz. Ayni Postgres sunucusu, farkli DB
+# adi - ayni ortam degiskenleri (DB_USER/DB_PASSWORD) tekrar kullanilir.
+kurum:
+  datasource:
+    url: ${KURUM_DB_URL:jdbc:postgresql://localhost:5433/kurum_dizini}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+
 asistan:
   rag:
     # Spring AI 1.1.x'teki TokenTextSplitter'da ayri bir "overlap" parametresi yok
