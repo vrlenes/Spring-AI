@@ -16,6 +16,7 @@ export interface TalepFiltre {
   mahalle?: string
   gunSayisi?: number
   atanmamis?: boolean
+  limit?: number
 }
 
 export async function talepleriGetir(filtre: TalepFiltre): Promise<TalepOzeti[]> {
@@ -26,6 +27,7 @@ export async function talepleriGetir(filtre: TalepFiltre): Promise<TalepOzeti[]>
   if (filtre.mahalle) params.set('mahalle', filtre.mahalle)
   if (filtre.gunSayisi) params.set('gunSayisi', String(filtre.gunSayisi))
   if (filtre.atanmamis) params.set('atanmamis', 'true')
+  if (filtre.limit) params.set('limit', String(filtre.limit))
 
   const yanit = await fetch(`/api/talepler?${params.toString()}`)
   if (!yanit.ok) {

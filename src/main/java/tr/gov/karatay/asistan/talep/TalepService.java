@@ -256,9 +256,14 @@ public class TalepService {
             return null;
         }
         String desen = "%" + anahtarKelime.toLowerCase() + "%";
+        // takipNo da dahil - orn. "@" ile takip no otomatik tamamlamasi
+        // (frontend) kullaniciyla ayni alani kullanabilsin diye (bkz.
+        // ChatComposer.tsx). Once konu/kategori metniyle arama yapan bu
+        // filtre, artik kismi takip no ile de eslesebiliyor.
         return (root, query, cb) -> cb.or(
                 cb.like(cb.lower(root.get("konuMetni")), desen),
-                cb.like(cb.lower(root.get("kategori")), desen));
+                cb.like(cb.lower(root.get("kategori")), desen),
+                cb.like(cb.lower(root.get("takipNo")), desen));
     }
 
     private Specification<Talep> atanmamisSpec(Boolean sadeceAtanmamis) {
