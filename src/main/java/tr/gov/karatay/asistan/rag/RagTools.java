@@ -1,0 +1,137 @@
+package tr.gov.karatay.asistan.rag;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.ai.chat.model.ToolContext;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import tr.gov.karatay.asistan.chat.dto.Kaynak;
+import tr.gov.karatay.asistan.common.enums.SohbetModu;
+import tr.gov.karatay.asistan.talep.TalepTools;
+
+// TalepTools ile ayni ince-sarmalayici ilkesi (CLAUDE.md): is mantigi
+// burada degil, sadece VectorStore'u cagirip sonucu modelin okuyacagi
+// metne cevirir. ONCEDEN RAG, ChatService'te modelin hic haberi olmadan
+// yapilan SABIT, TEK SEFERLIK bir on-arama idi (QuestionAnswerAdvisor ile) -
+// arama basarisiz olsa bile model TEKRAR arayamiyordu (canli test edilerek
+// bulundu: "ada parsel nasil belirlenir" sorusu, cevap belgede acikca var
+// olmasina ragmen - Madde 18 - ilk aramada eslesmedigi icin "bulunamadi"
+// sonucu veriyordu). Artik RAG da tam bir arac: model istedigi kadar farkli
+// sorguyla (madde numarasi, es anlamli terim vb.) tekrar cagirabilir - ayni
+// TalepTools'un "modelin karar verdigi, koddan gelen veri" ilkesi.
+@Component
+public class RagTools {
+
+    public static final String KAYNAK_SINK = "kaynakSink";
+    public static final String MOD_KEY = "aktifMod";
+
+    private final VectorStore vectorStore;
+    private final int topK;
+    private final double benzerlikEsigi;
+
+    public RagTools(
+            VectorStore vectorStore,
+            @Value("${asistan.rag.top-k}") int topK,
+            @Value("${asistan.rag.similarity-threshold}") double benzerlikEsigi) {
+        this.vectorStore = vectorStore;
+        this.topK = topK;
+        this.benzerlikEsigi = benzerlikEsigi;
+    }
+
+    @Tool(description = """
+            Yuklenmis mevzuat belgelerinde arama yapar. Mevzuat/yonetmelik ile ilgili
+            HER soruda bu araci en az bir kez cagir - kendi bilginden dogrudan cevap
+            verme. Ilk arama sonucu soruyu tam karsilamiyorsa veya alakasiz gorunuyorsa,
+            FARKLI anahtar kelimelerle (orn. madde numarasi, es anlamli terimler, daha
+            genel ya da daha spesifik ifadeler) TEKRAR cagirabilirsin - vazgecmeden once
+            en az 2-3 farkli sorgu dene. Hicbir sonuc gercekten ilgili degilse bunu
+            acikca belirt, kendi bilginden uydurma.""")
+    public String belgeAra(
+            @ToolParam(description = "Arama sorgusu - once kullanicinin sorusunu birebir dene, basarisiz olursa farkli kelimelerle (madde numarasi, es anlamli terim) tekrar yaz.")
+            String sorgu,
+            ToolContext toolContext) {
+        kaydetKullanilanArac(toolContext, "Belgelerde arandı");
+
+        SohbetModu mod = modOku(toolContext);
+        SearchRequest.Builder istek = SearchRequest.builder()
+                .query(sorgu)
+                .topK(topK)
+                .similarityThreshold(benzerlikEsigi);
+
+        Filter.Expression filtre = modFiltresi(mod);
+        if (filtre != null) {
+            istek.filterExpression(filtre);
+        }
+
+        List<Document> belgeler = vectorStore.similaritySearch(istek.build());
+        if (belgeler.isEmpty()) {
+            return "Bu sorguyla eslesen bir belge parcasi bulunamadi. Farkli kelimelerle tekrar deneyebilirsin.";
+        }
+
+        kaydetKaynaklar(toolContext, belgeler);
+
+        return belgeler.stream()
+                .map(d -> "[%s] %s".formatted(d.getMetadata().getOrDefault("baslik", "Bilinmeyen belge"), d.getText()))
+                .collect(Collectors.joining("\n---\n"));
+    }
+
+    private SohbetModu modOku(ToolContext toolContext) {
+        if (toolContext == null) {
+            return SohbetModu.GENEL;
+        }
+        Object deger = toolContext.getContext().get(MOD_KEY);
+        return deger instanceof SohbetModu mod ? mod : SohbetModu.GENEL;
+    }
+
+    // GENEL modda sadece hicbir moda etiketlenmemis (paylasilan) belgeler
+    // aranir; IMAR/RUHSAT gibi ozel modlara etiketlenmis belgeler GENEL'de
+    // "gurultu" olmasin diye kapsam disinda tutulur (bkz. Dokuman.mod,
+    // DokumanIngestService). IMAR/RUHSAT modlarinda ise SADECE o moda ait
+    // belgeler aranir - her modun kendi izole belge havuzu olur.
+    private Filter.Expression modFiltresi(SohbetModu mod) {
+        FilterExpressionBuilder b = new FilterExpressionBuilder();
+        return switch (mod) {
+            case GENEL -> b.eq("mod", "").build();
+            case IMAR -> b.eq("mod", SohbetModu.IMAR.name()).build();
+            case RUHSAT -> b.eq("mod", SohbetModu.RUHSAT.name()).build();
+            case TALEP -> null;
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private void kaydetKaynaklar(ToolContext toolContext, List<Document> belgeler) {
+        if (toolContext == null) {
+            return;
+        }
+        Object sink = toolContext.getContext().get(KAYNAK_SINK);
+        if (sink instanceof List<?> liste) {
+            for (Document belge : belgeler) {
+                ((List<Kaynak>) liste)
+                        .add(new Kaynak(
+                                String.valueOf(belge.getMetadata().getOrDefault("baslik", "Bilinmeyen belge")),
+                                belge.getMetadata().get("chunkIndex") instanceof Number sayi ? sayi.intValue() : 0,
+                                belge.getScore()));
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void kaydetKullanilanArac(ToolContext toolContext, String etiket) {
+        if (toolContext == null) {
+            return;
+        }
+        Object sink = toolContext.getContext().get(TalepTools.KULLANILAN_ARAC_SINK);
+        if (sink instanceof List<?> liste) {
+            ((List<String>) liste).add(etiket);
+        }
+    }
+}

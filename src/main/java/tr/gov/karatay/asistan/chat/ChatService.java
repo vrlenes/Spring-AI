@@ -8,14 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.ai.vectorstore.filter.Filter;
-import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +25,7 @@ import tr.gov.karatay.asistan.common.LlmEsZamanliSinirlayici;
 import tr.gov.karatay.asistan.common.enums.MesajRolu;
 import tr.gov.karatay.asistan.common.enums.SohbetModu;
 import tr.gov.karatay.asistan.config.ChatClientConfig;
+import tr.gov.karatay.asistan.rag.RagTools;
 import tr.gov.karatay.asistan.sohbet.SohbetService;
 import tr.gov.karatay.asistan.talep.PendingActionService;
 import tr.gov.karatay.asistan.talep.TalepTools;
@@ -54,44 +48,42 @@ public class ChatService {
     // ikisi de bossa, arayuz bunu "genel bilgi" olarak isaretliyor - modelin
     // kendi ifadesine guvenmeden, ayni "kaynak gosterimi koddan uretilir"
     // prensibiyle (bkz. CLAUDE.md).
+    //
+    // RAG DE ARTIK BIR ARAC (bkz. RagTools.belgeAra): eskiden burada SABIT,
+    // TEK SEFERLIK bir on-arama yapilip QuestionAnswerAdvisor ile prompt'a
+    // enjekte ediliyordu - model arama basarisiz olsa bile tekrar arayamiyordu
+    // (canli test: "ada parsel nasil belirlenir" sorusu, cevap belgede
+    // Madde 18'de acikca varken ilk aramada eslesmedigi icin "bulunamadi"
+    // sonucu veriyordu). Artik ChatService kaynaklari KENDISI ARAMIYOR -
+    // sadece RagTools.belgeAra'nin (model tarafindan istendigi kadar
+    // cagrilan) sonuclarini bir sink uzerinden toplayip koda dayali
+    // "kaynaklar" listesini olusturuyor.
     private final ChatClient chatClient;
-    private final VectorStore vectorStore;
-    private final QuestionAnswerAdvisor questionAnswerAdvisor;
     private final PendingActionService pendingActionService;
     private final SohbetService sohbetService;
     private final ObjectMapper objectMapper;
     private final LlmEsZamanliSinirlayici llmSinirlayici;
-    private final int topK;
-    private final double benzerlikEsigi;
 
     public ChatService(
             ChatClient chatClient,
-            VectorStore vectorStore,
-            QuestionAnswerAdvisor questionAnswerAdvisor,
             PendingActionService pendingActionService,
             SohbetService sohbetService,
             ObjectMapper objectMapper,
-            LlmEsZamanliSinirlayici llmSinirlayici,
-            @Value("${asistan.rag.top-k}") int topK,
-            @Value("${asistan.rag.similarity-threshold}") double benzerlikEsigi) {
+            LlmEsZamanliSinirlayici llmSinirlayici) {
         this.chatClient = chatClient;
-        this.vectorStore = vectorStore;
-        this.questionAnswerAdvisor = questionAnswerAdvisor;
         this.pendingActionService = pendingActionService;
         this.sohbetService = sohbetService;
         this.objectMapper = objectMapper;
         this.llmSinirlayici = llmSinirlayici;
-        this.topK = topK;
-        this.benzerlikEsigi = benzerlikEsigi;
     }
 
     public ChatResponse yanitla(ChatRequest istek, Long personelId) {
         SohbetModu mod = modCoz(istek.mod());
         String conversationId = sohbetIdCoz(istek.conversationId(), personelId, mod);
-        List<Kaynak> kaynaklar = kaynaklarBul(istek.mesaj(), mod);
         List<String> bekleyenIslemIdleri = new ArrayList<>();
         List<String> kullanilanAraclar = new ArrayList<>();
         List<YapisalVeriPaketi> yapisalVeriListesi = new ArrayList<>();
+        List<Kaynak> kaynakListesi = new ArrayList<>();
 
         sohbetService.mesajEkle(conversationId, MesajRolu.KULLANICI, istek.mesaj(), null, null, null, null);
 
@@ -108,19 +100,17 @@ public class ChatService {
                 .toolContext(Map.of(
                         TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri,
                         TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar,
-                        TalepTools.YAPISAL_VERI_SINK, yapisalVeriListesi))
-                .advisors(a -> {
-                    a.param(ChatMemory.CONVERSATION_ID, conversationId);
-                    if (!kaynaklar.isEmpty()) {
-                        a.advisors(questionAnswerAdvisor);
-                    }
-                });
+                        TalepTools.YAPISAL_VERI_SINK, yapisalVeriListesi,
+                        RagTools.KAYNAK_SINK, kaynakListesi,
+                        RagTools.MOD_KEY, mod))
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId));
 
         ChatClientResponse yanit =
                 llmSinirlayici.sinirliCagir(() -> sonIstekSpec.call().chatClientResponse());
 
         String cevapMetni = metniCikar(yanit);
         List<String> araclar = benzersiz(kullanilanAraclar);
+        List<Kaynak> kaynaklar = benzersiz(kaynakListesi);
         PendingActionOzeti bekleyenIslem = bekleyenIslemBul(bekleyenIslemIdleri);
         YapisalVeriPaketi yapisalVeri = yapisalVeriListesi.isEmpty() ? null : yapisalVeriListesi.get(0);
         sohbetService.mesajEkle(
@@ -151,10 +141,10 @@ public class ChatService {
 
         SohbetModu mod = modCoz(istek.mod());
         String conversationId = sohbetIdCoz(istek.conversationId(), personelId, mod);
-        List<Kaynak> kaynaklar = kaynaklarBul(istek.mesaj(), mod);
         List<String> bekleyenIslemIdleri = new ArrayList<>();
         List<String> kullanilanAraclar = new ArrayList<>();
         List<YapisalVeriPaketi> yapisalVeriListesi = new ArrayList<>();
+        List<Kaynak> kaynakListesi = new ArrayList<>();
         StringBuilder birikenMetin = new StringBuilder();
 
         sohbetService.mesajEkle(conversationId, MesajRolu.KULLANICI, istek.mesaj(), null, null, null, null);
@@ -172,13 +162,10 @@ public class ChatService {
                 .toolContext(Map.of(
                         TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri,
                         TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar,
-                        TalepTools.YAPISAL_VERI_SINK, yapisalVeriListesi))
-                .advisors(a -> {
-                    a.param(ChatMemory.CONVERSATION_ID, conversationId);
-                    if (!kaynaklar.isEmpty()) {
-                        a.advisors(questionAnswerAdvisor);
-                    }
-                })
+                        TalepTools.YAPISAL_VERI_SINK, yapisalVeriListesi,
+                        RagTools.KAYNAK_SINK, kaynakListesi,
+                        RagTools.MOD_KEY, mod))
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .stream()
                 .chatClientResponse()
                 .mapNotNull(yanit -> {
@@ -191,6 +178,7 @@ public class ChatService {
                 });
 
         Flux<ServerSentEvent<String>> kaynakOlayi = Flux.defer(() -> {
+            List<Kaynak> kaynaklar = benzersiz(kaynakListesi);
             if (kaynaklar.isEmpty()) {
                 return Flux.empty();
             }
@@ -244,6 +232,7 @@ public class ChatService {
                 .doFinally(sinyal -> {
                     llmSinirlayici.izinBirak();
                     List<String> araclar = benzersiz(kullanilanAraclar);
+                    List<Kaynak> kaynaklar = benzersiz(kaynakListesi);
                     PendingActionOzeti bekleyenIslem = bekleyenIslemBul(bekleyenIslemIdleri);
                     YapisalVeriPaketi yapisalVeri = yapisalVeriListesi.isEmpty() ? null : yapisalVeriListesi.get(0);
                     if (!birikenMetin.isEmpty()) {
@@ -286,30 +275,11 @@ public class ChatService {
         };
     }
 
-    private List<Kaynak> kaynaklarBul(String mesaj, SohbetModu mod) {
-        return mod == SohbetModu.TALEP ? List.of() : ilgiliKaynaklariBul(mesaj, mod);
-    }
-
-    // GENEL modda sadece hicbir moda etiketlenmemis (paylasilan) belgeler
-    // aranir - IMAR/RUHSAT gibi ozel modlara etiketlenmis belgeler GENEL'de
-    // "gurultu" olmasin diye kapsam disinda tutulur (bkz. Dokuman.mod,
-    // DokumanIngestService). IMAR/RUHSAT modlarinda ise SADECE o moda ait
-    // belgeler aranir - her modun kendi izole belge havuzu olur.
-    private Filter.Expression modFiltresi(SohbetModu mod) {
-        FilterExpressionBuilder b = new FilterExpressionBuilder();
-        return switch (mod) {
-            case GENEL -> b.eq("mod", "").build();
-            case IMAR -> b.eq("mod", SohbetModu.IMAR.name()).build();
-            case RUHSAT -> b.eq("mod", SohbetModu.RUHSAT.name()).build();
-            case TALEP -> null;
-        };
-    }
-
     private <T> List<T> bosMu(List<T> liste) {
         return liste.isEmpty() ? null : liste;
     }
 
-    private List<String> benzersiz(List<String> liste) {
+    private <T> List<T> benzersiz(List<T> liste) {
         return liste.stream().distinct().toList();
     }
 
@@ -321,26 +291,6 @@ public class ChatService {
                 .getir(bekleyenIslemIdleri.get(0))
                 .map(a -> new PendingActionOzeti(a.id(), a.tur(), a.takipNo(), a.aciklama()))
                 .orElse(null);
-    }
-
-    private List<Kaynak> ilgiliKaynaklariBul(String mesaj, SohbetModu mod) {
-        SearchRequest.Builder aramaIstegi = SearchRequest.builder()
-                .query(mesaj)
-                .topK(topK)
-                .similarityThreshold(benzerlikEsigi);
-
-        Filter.Expression filtre = modFiltresi(mod);
-        if (filtre != null) {
-            aramaIstegi.filterExpression(filtre);
-        }
-
-        List<Document> belgeler = vectorStore.similaritySearch(aramaIstegi.build());
-        return belgeler.stream()
-                .map(belge -> new Kaynak(
-                        String.valueOf(belge.getMetadata().getOrDefault("baslik", "Bilinmeyen belge")),
-                        belge.getMetadata().get("chunkIndex") instanceof Number sayi ? sayi.intValue() : 0,
-                        belge.getScore()))
-                .toList();
     }
 
     private String metniCikar(ChatClientResponse yanit) {

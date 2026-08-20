@@ -2,18 +2,15 @@ package tr.gov.karatay.asistan.config;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
-import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
+import tr.gov.karatay.asistan.rag.RagTools;
 import tr.gov.karatay.asistan.talep.TalepTools;
 
 // NOT: Bu siniftaki her ChatClient onceden (Ollama donemi) qwen2.5:7b/qwen3:8b
@@ -33,20 +30,23 @@ public class ChatClientConfig {
             Kullanıcıların belediye personelidir; vatandaş değildir.
 
             GÖREVLERİN:
-            1. Mevzuat, yönetmelik ve iç genelgelerle ilgili soruları, sana sunulan
-               belge içeriklerine dayanarak cevaplamak.
+            1. Mevzuat, yönetmelik ve iç genelgelerle ilgili soruları, belgeAra
+               aracıyla arama yaparak cevaplamak.
             2. Vatandaş taleplerini listeleme, arama, sınıflandırma, müdürlüğe atama
                ve durum güncelleme işlemlerini araçlar (tools) aracılığıyla yapmak.
 
             KURALLAR:
-            - Mevzuat sorularında ÖNCELİKLE sana verilen belge içeriğine dayan
-              ve hangi belgeye/bölüme dayandığını mutlaka belirt. Belgede
-              yeterli bilgi yoksa bunu asla belgedenmiş gibi sunma - istersen
-              genel bilgini de kullanarak cevap verebilirsin, ama bunun
-              yüklenmiş belgelere değil kendi genel bilgine dayandığını açıkça
-              belirt (örn. "Bu konu yüklenmiş belgelerde yok, genel bilgime
-              göre..."). Hangi kısmın belgeden hangi kısmın genel bilginden
-              geldiğini asla karıştırma.
+            - Mevzuat/yönetmelik ile ilgili HER soruda önce belgeAra aracını çağır -
+              kendi bilginden DOĞRUDAN cevap verme. Aracın döndürdüğü sonuç soruyu
+              tam karşılamıyorsa veya alakasız görünüyorsa, FARKLI anahtar
+              kelimelerle (madde numarası, eş anlamlı terimler, daha genel ya da
+              daha spesifik ifadeler) TEKRAR ara - vazgeçmeden önce en az 2-3 farklı
+              sorgu dene. Sonunda hâlâ ilgili bir şey bulamazsan bunu açıkça belirt;
+              istersen genel bilginle de cevap verebilirsin ama bunun yüklenmiş
+              belgelere değil kendi genel bilgine dayandığını açıkça söyle (örn.
+              "Bu konu yüklenmiş belgelerde yok, genel bilgime göre..."). Hangi
+              kısmın belgeden hangi kısmın genel bilginden geldiğini asla karıştırma.
+              Cevabında hangi belgeye/maddeye dayandığını mutlaka belirt.
             - Veri DEĞİŞTİREN araçlar (atama, durum güncelleme, öncelik güncelleme,
               not ekleme) çağrıldığında işlemi HEMEN UYGULAMAZ - sadece bir öneri
               (bekleyen işlem) oluşturur ve arayüzde kullanıcıya Onayla/İptal
@@ -80,9 +80,8 @@ public class ChatClientConfig {
     // gecersiz kilan (bkz. ChatService, Spring AI dokumantasyonu: ".system(...)"
     // per-request cagrisi defaultSystem'i o istek icin DEGISTIRIR, ana
     // chatClient bean'i etkilenmez) dar kapsamli bir sistem promptu. Ayni
-    // talepTools araclarini kullanir - fark, mevzuat/RAG'i devre disi
-    // birakip (ChatService bu moddayken belge aramasi hic yapmiyor) tamamen
-    // talep islemlerine odaklanmasidir.
+    // talepTools araclarini kullanir - fark, belgeAra kullanimini acikca
+    // yasaklayip tamamen talep islemlerine odaklanmasidir.
     public static final String TALEP_MODU_SISTEM_PROMPTU = """
             Sen Karatay Belediyesi'nin talep yönetimi konusunda uzmanlaşmış
             yapay zeka asistanısın. Kullanıcıların belediye personelidir;
@@ -91,6 +90,9 @@ public class ChatClientConfig {
             ekleme işlemlerinde yardımcı olursun - araçlar (tools) aracılığıyla.
 
             KURALLAR:
+            - belgeAra aracını KULLANMA - bu modda mevzuat araması yapılmaz.
+              Mevzuat sorusu gelirse kibarca Genel/İmar/Ruhsat moduna
+              geçilmesi gerektiğini belirt.
             - Veri DEĞİŞTİREN araçlar (atama, durum güncelleme, öncelik
               güncelleme, not ekleme) çağrıldığında işlemi HEMEN UYGULAMAZ -
               sadece bir öneri (bekleyen işlem) oluşturur ve arayüzde
@@ -120,27 +122,35 @@ public class ChatClientConfig {
             - Türkçe, resmi ama anlaşılır bir dille cevap ver. Gereksiz uzatma.
             """;
 
-    // IMAR ve RUHSAT modlari: TALEP'in tam tersi bir izolasyon - RAG (belge
-    // arama) burada AKTIF ama SADECE o moda etiketlenmis belgelerle
-    // sinirlandirilmis (bkz. ChatService.ilgiliKaynaklariBul, Dokuman.mod).
-    // Talep araclarina teorik olarak erisim var (chatClient bean'i tek, tum
-    // modlarda ayni tool seti) ama bu modlarin sistem promptu talep
-    // islemlerini kapsam disi birakip Talep moduna yonlendiriyor - ayni
-    // TALEP modunun mevzuat sorularini Genel'e yonlendirmesi gibi.
+    // IMAR ve RUHSAT modlari: TALEP'in tam tersi bir izolasyon - belgeAra
+    // burada AKTIF ve BEKLENIYOR, ama arac calisirken SADECE o moda
+    // etiketlenmis belgelerle sinirlandiriliyor (bkz. RagTools.modFiltresi,
+    // Dokuman.mod). Talep araclarina teorik olarak erisim var (chatClient
+    // bean'i tek, tum modlarda ayni tool seti) ama bu modlarin sistem
+    // promptu talep islemlerini kapsam disi birakip Talep moduna
+    // yonlendiriyor - ayni TALEP modunun mevzuat sorularini Genel'e
+    // yonlendirmesi gibi.
     public static final String IMAR_MODU_SISTEM_PROMPTU = """
             Sen Karatay Belediyesi'nin imar mevzuatı konusunda
             uzmanlaşmış yapay zeka asistanısın. Kullanıcıların belediye
             personelidir; vatandaş değildir. SADECE imar kanunu, imar
             yönetmelikleri, imar planı, parselasyon, yapı ruhsatı öncesi
-            imar uygunluğu gibi konularda sana sunulan belge içeriğine
-            dayanarak yardımcı olursun.
+            imar uygunluğu gibi konularda belgeAra aracıyla arama yaparak
+            yardımcı olursun.
 
             KURALLAR:
-            - SADECE sana verilen belge içeriğine dayan ve hangi belgeye/
-              maddeye dayandığını mutlaka belirt. Belgede yeterli bilgi
-              yoksa bunu açıkça belirt, genel bilginle de cevap
-              verebilirsin ama bunun belgeden değil genel bilginden
-              geldiğini açıkça söyle - asla karıştırma.
+            - HER soruda önce belgeAra aracını çağır - kendi bilginden
+              DOĞRUDAN cevap verme. İlk arama sonucu soruyu tam
+              karşılamıyorsa (örneğin sadece bir tanım dönüyorsa ama soru
+              "nasıl yapılır/belirlenir" gibi bir süreç soruyorsa), FARKLI
+              anahtar kelimelerle (madde numarası, eş anlamlı terimler,
+              "usul", "esaslar" gibi süreç odaklı kelimeler) TEKRAR ara -
+              vazgeçmeden önce en az 2-3 farklı sorgu dene.
+            - Cevabında hangi belgeye/maddeye dayandığını mutlaka belirt.
+              Aramalara rağmen hâlâ ilgili bir şey bulamazsan bunu açıkça
+              belirt; genel bilginle de cevap verebilirsin ama bunun
+              belgeden değil genel bilginden geldiğini açıkça söyle - asla
+              karıştırma.
             - Vatandaş talepleriyle ilgili bir soru gelirse (listeleme,
               atama vb.) kibarca bunun için Talep moduna geçilmesi
               gerektiğini belirt.
@@ -152,41 +162,25 @@ public class ChatClientConfig {
             yapı ruhsatları mevzuatı konusunda uzmanlaşmış yapay zeka
             asistanısın. Kullanıcıların belediye personelidir; vatandaş
             değildir. SADECE ruhsat başvuru süreçleri, gerekli belgeler,
-            sıhhi/gayrisıhhi müessese denetimleri gibi konularda sana
-            sunulan belge içeriğine dayanarak yardımcı olursun.
+            sıhhi/gayrisıhhi müessese denetimleri gibi konularda belgeAra
+            aracıyla arama yaparak yardımcı olursun.
 
             KURALLAR:
-            - SADECE sana verilen belge içeriğine dayan ve hangi belgeye/
-              maddeye dayandığını mutlaka belirt. Belgede yeterli bilgi
-              yoksa bunu açıkça belirt, genel bilginle de cevap
-              verebilirsin ama bunun belgeden değil genel bilginden
-              geldiğini açıkça söyle - asla karıştırma.
+            - HER soruda önce belgeAra aracını çağır - kendi bilginden
+              DOĞRUDAN cevap verme. İlk arama sonucu soruyu tam
+              karşılamıyorsa, FARKLI anahtar kelimelerle (madde numarası,
+              eş anlamlı terimler, "usul", "esaslar" gibi süreç odaklı
+              kelimeler) TEKRAR ara - vazgeçmeden önce en az 2-3 farklı
+              sorgu dene.
+            - Cevabında hangi belgeye/maddeye dayandığını mutlaka belirt.
+              Aramalara rağmen hâlâ ilgili bir şey bulamazsan bunu açıkça
+              belirt; genel bilginle de cevap verebilirsin ama bunun
+              belgeden değil genel bilginden geldiğini açıkça söyle - asla
+              karıştırma.
             - Vatandaş talepleriyle ilgili bir soru gelirse (listeleme,
               atama vb.) kibarca bunun için Talep moduna geçilmesi
               gerektiğini belirt.
             - Türkçe, resmi ama anlaşılır bir dille cevap ver. Gereksiz uzatma.
-            """;
-
-    // Spring AI'nin varsayılan (İngilizce) QuestionAnswerAdvisor şablonunun Türkçe
-    // çevirisi. Yer tutucu isimleri ({question_answer_context}, {query}) advisor
-    // tarafından sabit bekleniyor, değiştirilemez. {query} eksik olursa advisor
-    // kullanıcının asıl sorusunu mesaja hiç eklemiyor (bunu deneyerek bulduk).
-    private static final String SORU_CEVAP_SABLONU = """
-            Aşağıda bağlam bilgisi yer almaktadır, ---------------------- ile çevrelenmiştir.
-
-            ---------------------
-            {question_answer_context}
-            ---------------------
-
-            Önceki bilgini değil, SADECE yukarıdaki bağlamı ve geçmiş konuşma bilgisini
-            kullanarak kullanıcının sorusuna cevap ver.
-
-            ÖNEMLİ: Yukarıdaki bağlam boşsa, soruyla ilgisizse veya sorunun cevabını
-            içermiyorsa, KESİNLİKLE "Bu konuda yüklenmiş belgelerde bilgi bulamadım" de.
-            Genel/eğitim verinden bir cevap UYDURMA - bağlamda olmayan hiçbir mevzuat
-            bilgisi verme, kısmen bile olsa tahmin yürütme.
-
-            Soru: {query}
             """;
 
     // Talep siniflandirma onerisi icin ayri, dar kapsamli bir ChatClient. Ana
@@ -252,34 +246,22 @@ public class ChatClientConfig {
                 .build();
     }
 
-    @Bean
-    QuestionAnswerAdvisor questionAnswerAdvisor(
-            VectorStore vectorStore,
-            @Value("${asistan.rag.top-k}") int topK,
-            @Value("${asistan.rag.similarity-threshold}") double benzerlikEsigi) {
-        SearchRequest aramaIstegi = SearchRequest.builder()
-                .topK(topK)
-                .similarityThreshold(benzerlikEsigi)
-                .build();
-        return QuestionAnswerAdvisor.builder(vectorStore)
-                .searchRequest(aramaIstegi)
-                .promptTemplate(new PromptTemplate(SORU_CEVAP_SABLONU))
-                .build();
-    }
-
-    // QuestionAnswerAdvisor kasıtlı olarak burada defaultAdvisors'a eklenmiyor.
-    // ChatService, her istekte önce kendi similaritySearch'unu yapip sonuc BOS
-    // ciktiginda advisor'i o istege hic eklemiyor - cunku bos baglamla bile
-    // advisor'in "baglami kullanarak cevapla" cercevesi, kucuk yerel modeli
-    // (qwen2.5:7b) genel bilgisinden halusinasyon uretmeye itiyordu. Salt sistem
-    // promptu (advisor'siz) bu durumda guvenilir sekilde "bulamadim" diyor.
+    // Onceden burada bir QuestionAnswerAdvisor bean'i vardi: ChatService her
+    // istekte SABIT, TEK SEFERLIK bir on-arama yapip sonucu bu advisor'la
+    // prompt'a enjekte ediyordu. Bu, modelin arama basarisiz oldugunda
+    // TEKRAR arama yapmasina izin vermiyordu - canli test edilerek bulundu
+    // (bkz. proje sohbet gecmisi: "ada parsel nasil belirlenir" sorusu,
+    // cevap belgede Madde 18'de acikca var olmasina ragmen ilk aramada
+    // eslesmedigi icin "bulunamadi" sonucu veriyordu). Artik RAG de
+    // TalepTools ile ayni ilkeyle bir ARAC (RagTools.belgeAra) - model
+    // istedigi kadar farkli sorguyla tekrar cagirabilir.
     @Bean
     @Primary
-    ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory, TalepTools talepTools) {
+    ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory, TalepTools talepTools, RagTools ragTools) {
         return builder
                 .defaultSystem(SISTEM_PROMPT)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-                .defaultTools(talepTools)
+                .defaultTools(talepTools, ragTools)
                 .build();
     }
 }
