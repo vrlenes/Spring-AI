@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
 import { ArrowUp, FileText, Paperclip, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { talepleriGetir } from '@/lib/talepler'
@@ -7,6 +7,12 @@ import { cn } from '@/lib/utils'
 import type { TalepOzeti } from '@/types/talep'
 
 const IZIN_VERILEN_EK_TURLERI = 'image/jpeg,image/png,image/webp,application/pdf'
+// Sunucudan bundan daha fazla oneri cekilir (TAKIP_NO_ONERI_TOPLAM), ama
+// ayni anda sadece bir "pencere" (TAKIP_NO_ONERI_GORUNUR kadar) gosterilir -
+// asagi tusuyla gezinirken pencere kaydirilir (ustteki kaybolur, alttan yeni
+// gelir), 6'da donup basa sarmak yerine.
+const TAKIP_NO_ONERI_GORUNUR = 6
+const TAKIP_NO_ONERI_TOPLAM = 24
 
 interface ChatComposerProps {
   disabled: boolean
@@ -56,7 +62,7 @@ export function ChatComposer({ disabled, onSend }: ChatComposerProps) {
     let iptalEdildi = false
     const zamanlayici = setTimeout(async () => {
       try {
-        const sonuc = await talepleriGetir({ anahtarKelime: mention!.sorgu || undefined, limit: 6 })
+        const sonuc = await talepleriGetir({ anahtarKelime: mention!.sorgu || undefined, limit: TAKIP_NO_ONERI_TOPLAM })
         if (!iptalEdildi) {
           setOneriler(sonuc)
           setSeciliIndeks(0)
@@ -70,6 +76,21 @@ export function ChatComposer({ disabled, onSend }: ChatComposerProps) {
       clearTimeout(zamanlayici)
     }
   }, [oneriAcik, mention])
+
+  // Secili oge her zaman gorunur pencerede kalacak sekilde pencereyi kaydirir:
+  // asagi inip pencerenin alt sinirini gecince pencere de asagi kayar (ustteki
+  // oge gorunumden cikar), yukari cikip ust sinira gelince tersi olur.
+  const pencereBaslangic = useMemo(() => {
+    let baslangic = 0
+    if (seciliIndeks >= baslangic + TAKIP_NO_ONERI_GORUNUR) {
+      baslangic = seciliIndeks - TAKIP_NO_ONERI_GORUNUR + 1
+    }
+    if (seciliIndeks < baslangic) {
+      baslangic = seciliIndeks
+    }
+    return baslangic
+  }, [seciliIndeks])
+  const gorunenOneriler = oneriler.slice(pencereBaslangic, pencereBaslangic + TAKIP_NO_ONERI_GORUNUR)
 
   function dosyaSecildi(e: ChangeEvent<HTMLInputElement>) {
     const secilen = e.target.files?.[0]
@@ -136,24 +157,27 @@ export function ChatComposer({ disabled, onSend }: ChatComposerProps) {
 
   return (
     <form onSubmit={gonder} className="relative shrink-0 border-t p-3">
-      {oneriAcik && oneriler.length > 0 && (
-        <div className="absolute right-3 bottom-full left-3 mb-1.5 max-h-56 overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg">
-          {oneriler.map((t, i) => (
-            <button
-              key={t.takipNo}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => oneriSec(t)}
-              onMouseEnter={() => setSeciliIndeks(i)}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px]',
-                i === seciliIndeks ? 'bg-muted' : 'hover:bg-muted/60',
-              )}
-            >
-              <span className="shrink-0 font-mono text-[11px] text-primary">{t.takipNo}</span>
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">{t.konuMetni}</span>
-            </button>
-          ))}
+      {oneriAcik && gorunenOneriler.length > 0 && (
+        <div className="absolute right-3 bottom-full left-3 mb-1.5 rounded-lg border bg-popover p-1 shadow-lg">
+          {gorunenOneriler.map((t, sliceI) => {
+            const gercekIndeks = pencereBaslangic + sliceI
+            return (
+              <button
+                key={t.takipNo}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => oneriSec(t)}
+                onMouseEnter={() => setSeciliIndeks(gercekIndeks)}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px]',
+                  gercekIndeks === seciliIndeks ? 'bg-muted' : 'hover:bg-muted/60',
+                )}
+              >
+                <span className="shrink-0 font-mono text-[11px] text-primary">{t.takipNo}</span>
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">{t.konuMetni}</span>
+              </button>
+            )
+          })}
         </div>
       )}
       {dosya && (
