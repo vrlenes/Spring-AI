@@ -40,14 +40,17 @@ public class RagTools {
     private static final Pattern MADDE_DESENI = Pattern.compile("(?i)madde\\s+(\\d+)");
 
     private final VectorStore vectorStore;
+    private final RagAramaLoguService ragAramaLoguService;
     private final int topK;
     private final double benzerlikEsigi;
 
     public RagTools(
             VectorStore vectorStore,
+            RagAramaLoguService ragAramaLoguService,
             @Value("${asistan.rag.top-k}") int topK,
             @Value("${asistan.rag.similarity-threshold}") double benzerlikEsigi) {
         this.vectorStore = vectorStore;
+        this.ragAramaLoguService = ragAramaLoguService;
         this.topK = topK;
         this.benzerlikEsigi = benzerlikEsigi;
     }
@@ -78,6 +81,15 @@ public class RagTools {
         }
 
         List<Document> belgeler = vectorStore.similaritySearch(istek.build());
+
+        // Her arama loglanir (sadece sifir sonuclar degil) - hangi sorgularin
+        // sistematik olarak zayif/sifir sonuc aldigi sonradan sorgulanabilsin
+        // diye (bkz. RagAramaLoguService, GET /api/rag-arama-loglari). Bu bug
+        // sinifi daha once canli testle rastlantisal kesfedildi (bkz. dosya
+        // basindaki yorum) - artik izlenebilir.
+        ragAramaLoguService.kaydet(
+                mod, sorgu, belgeler.size(), belgeler.isEmpty() ? null : belgeler.get(0).getScore());
+
         if (belgeler.isEmpty()) {
             return "Bu sorguyla eslesen bir belge parcasi bulunamadi. Farkli kelimelerle tekrar deneyebilirsin.";
         }
