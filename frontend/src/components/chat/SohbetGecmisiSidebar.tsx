@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { ClipboardList, LogOut, MessageSquare, Plus, Sparkles } from 'lucide-react'
+import { LogOut, MessageSquare, Plus } from 'lucide-react'
 import karatayLogo from '@/assets/karatay-logo.png'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -11,8 +11,7 @@ const MOD_ETIKETLERI: Record<SohbetModu, string> = { GENEL: 'Genel', TALEP: 'Tal
 
 export function SohbetGecmisiSidebar() {
   const { personel, cikisYap } = useAuthStore()
-  const { sohbetListesi, aktifSohbetId, aktifMod, sohbetListesiniYukle, yeniKonusma, modDegistir, sohbetSec } =
-    useSohbetStore()
+  const { sohbetListesi, aktifSohbetId, sohbetListesiniYukle, yeniKonusma, sohbetSec } = useSohbetStore()
 
   useEffect(() => {
     sohbetListesiniYukle()
@@ -29,24 +28,7 @@ export function SohbetGecmisiSidebar() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 p-3">
-        <div className="flex gap-1 rounded-lg bg-background p-0.5">
-          {(Object.keys(MOD_ETIKETLERI) as SohbetModu[]).map((mod) => (
-            <button
-              key={mod}
-              type="button"
-              onClick={() => modDegistir(mod)}
-              className={cn(
-                'flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors',
-                aktifMod === mod ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
-              )}
-            >
-              {mod === 'GENEL' ? <Sparkles className="size-3.5" /> : <ClipboardList className="size-3.5" />}
-              {MOD_ETIKETLERI[mod]}
-            </button>
-          ))}
-        </div>
-
+      <div className="p-3">
         <Button onClick={() => yeniKonusma()} variant="outline" className="w-full justify-start gap-2">
           <Plus className="size-4" />
           Yeni Konuşma
