@@ -39,6 +39,13 @@ export interface Mudurluk {
   sorumlulukAlani: string | null
 }
 
+export interface TalepIstatistik {
+  gunSayisi: number
+  mudurlukAdi: string | null
+  toplamTalep: number
+  durumDagilimi: Record<string, number>
+}
+
 export interface SiniflandirmaOnerisi {
   mudurlukAdi: string | null
   kategori: string | null

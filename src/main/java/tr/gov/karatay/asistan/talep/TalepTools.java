@@ -38,6 +38,9 @@ public class TalepTools {
     public static final String KULLANILAN_ARAC_SINK = "kullanilanAracSink";
     public static final String YAPISAL_VERI_SINK = "yapisalVeriSink";
     public static final String TIP_TALEP_LISTESI = "TALEP_LISTESI";
+    public static final String TIP_TALEP_DETAY = "TALEP_DETAY";
+    public static final String TIP_TALEP_ISTATISTIK = "TALEP_ISTATISTIK";
+    public static final String TIP_MUDURLUK_LISTESI = "MUDURLUK_LISTESI";
 
     private static final DateTimeFormatter TARIH_BICIMI = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
@@ -95,7 +98,10 @@ public class TalepTools {
             ToolContext toolContext) {
         kaydetKullanilanArac(toolContext, "Talep detayı getirildi");
         return talepService.talepDetayGetir(takipNo)
-                .map(this::detayMetni)
+                .map(detay -> {
+                    kaydetYapisalVeri(toolContext, TIP_TALEP_DETAY, detay);
+                    return detayMetni(detay);
+                })
                 .orElse("\"%s\" takip numarali talep bulunamadi.".formatted(takipNo));
     }
 
@@ -107,6 +113,7 @@ public class TalepTools {
             ToolContext toolContext) {
         kaydetKullanilanArac(toolContext, "İstatistik hesaplandı");
         TalepIstatistik istatistik = talepService.talepIstatistik(gunSayisi, mudurluk);
+        kaydetYapisalVeri(toolContext, TIP_TALEP_ISTATISTIK, istatistik);
         String basaLik = istatistik.mudurlukAdi() == null
                 ? "Son %d gun - tum mudurlukler".formatted(istatistik.gunSayisi())
                 : "Son %d gun - %s".formatted(istatistik.gunSayisi(), istatistik.mudurlukAdi());
@@ -122,6 +129,7 @@ public class TalepTools {
     public String mudurlukleriListele(ToolContext toolContext) {
         kaydetKullanilanArac(toolContext, "Müdürlükler listelendi");
         List<MudurlukOzeti> mudurlukler = mudurlukService.mudurlukleriListele();
+        kaydetYapisalVeri(toolContext, TIP_MUDURLUK_LISTESI, mudurlukler);
         return mudurlukler.stream()
                 .map(m -> "- %s: %s".formatted(m.ad(), m.sorumlulukAlani()))
                 .collect(Collectors.joining("\n"));
