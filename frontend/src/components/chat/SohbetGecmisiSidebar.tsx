@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { LogOut, MessageSquare, Plus } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { LogOut, MessageSquare, Plus, Search, X } from 'lucide-react'
 import karatayLogo from '@/assets/karatay-logo.png'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -12,11 +12,22 @@ const MOD_ETIKETLERI: Record<SohbetModu, string> = { GENEL: 'Genel', TALEP: 'Tal
 export function SohbetGecmisiSidebar() {
   const { personel, cikisYap } = useAuthStore()
   const { sohbetListesi, aktifSohbetId, sohbetListesiniYukle, yeniKonusma, sohbetSec } = useSohbetStore()
+  const [arama, setArama] = useState('')
 
   useEffect(() => {
     sohbetListesiniYukle()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const filtrelenmisListe = useMemo(() => {
+    const sorgu = arama.trim().toLocaleLowerCase('tr')
+    if (!sorgu) return sohbetListesi
+    return sohbetListesi.filter((s) => {
+      const baslik = (s.baslik ?? 'Yeni konuşma').toLocaleLowerCase('tr')
+      const mod = MOD_ETIKETLERI[s.mod].toLocaleLowerCase('tr')
+      return baslik.includes(sorgu) || mod.includes(sorgu)
+    })
+  }, [sohbetListesi, arama])
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r bg-muted/30 md:flex">
@@ -28,19 +39,45 @@ export function SohbetGecmisiSidebar() {
         </div>
       </div>
 
-      <div className="p-3">
+      <div className="flex flex-col gap-2 p-3">
         <Button onClick={() => yeniKonusma()} variant="outline" className="w-full justify-start gap-2">
           <Plus className="size-4" />
           Yeni Konuşma
         </Button>
+
+        {sohbetListesi.length > 0 && (
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={arama}
+              onChange={(e) => setArama(e.target.value)}
+              placeholder="Konuşmalarda ara..."
+              autoComplete="off"
+              className="w-full rounded-md border bg-background py-1.5 pr-7 pl-8 text-[12.5px] outline-none focus:border-foreground/20"
+            />
+            {arama && (
+              <button
+                type="button"
+                onClick={() => setArama('')}
+                aria-label="Aramayı temizle"
+                className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
         {sohbetListesi.length === 0 && (
           <p className="px-2 py-3 text-[11.5px] text-muted-foreground">Henüz bir konuşma yok.</p>
         )}
+        {sohbetListesi.length > 0 && filtrelenmisListe.length === 0 && (
+          <p className="px-2 py-3 text-[11.5px] text-muted-foreground">"{arama}" ile eşleşen bir konuşma yok.</p>
+        )}
         <div className="flex flex-col gap-0.5">
-          {sohbetListesi.map((s) => (
+          {filtrelenmisListe.map((s) => (
             <button
               key={s.id}
               type="button"
