@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: Belediye Asistan (Postgres)
+    type: postgres
+    access: proxy
+    uid: belediye-postgres
+    url: db:5432
+    user: postgres
+    isDefault: true
+    editable: true
+    jsonData:
+      database: belediye_asistan
+      sslmode: disable
+      postgresVersion: 1600
+    secureJsonData:
+      password: postgres

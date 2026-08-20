@@ -21,5 +21,25 @@ services:
       timeout: 5s
       retries: 10
 
+  # rag_arama_logu tablosunu (bkz. RagAramaLoguService) gorsellestirmek icin -
+  # Postgres'e dogrudan bagli, hazir bir dashboard'la gelir (provisioning,
+  # bkz. docker/grafana/). Uygulama kodunu etkilemez, salt-okunur bir
+  # gozlemlenebilirlik katmani.
+  grafana:
+    image: grafana/grafana-oss:latest
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  grafana-data:

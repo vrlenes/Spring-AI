@@ -1,0 +1,156 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "postgres", "uid": "belediye-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "belediye-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS toplam_iskalama FROM rag_arama_logu WHERE sonuc_sayisi = 0",
+          "refId": "A"
+        }
+      ],
+      "title": "Toplam Sıfır-Sonuç Arama",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "belediye-postgres" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "belediye-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS toplam_arama FROM rag_arama_logu",
+          "refId": "A"
+        }
+      ],
+      "title": "Toplam Arama",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "belediye-postgres" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 3,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "belediye-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COALESCE(mod, 'GENEL') AS mod, count(*) AS sayi FROM rag_arama_logu WHERE sonuc_sayisi = 0 GROUP BY mod ORDER BY sayi DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Mod Bazında Sıfır-Sonuç Sayısı",
+      "type": "barchart"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "belediye-postgres" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 4 },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "belediye-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT round(avg(en_iyi_benzerlik)::numeric, 3) AS ortalama_benzerlik FROM rag_arama_logu WHERE en_iyi_benzerlik IS NOT NULL",
+          "refId": "A"
+        }
+      ],
+      "title": "Ortalama En İyi Benzerlik",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "belediye-postgres" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 12 },
+      "id": 4,
+      "options": { "showHeader": true },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "belediye-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT olusturma_tarihi AS \"Zaman\", COALESCE(mod,'GENEL') AS \"Mod\", sorgu AS \"Sorgu\", sonuc_sayisi AS \"Sonuç\", round(en_iyi_benzerlik::numeric, 3) AS \"En İyi Benzerlik\" FROM rag_arama_logu ORDER BY olusturma_tarihi DESC LIMIT 200",
+          "refId": "A"
+        }
+      ],
+      "title": "Son Aramalar",
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["belediye-asistan", "rag"],
+  "templating": { "list": [] },
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "RAG Arama Logları",
+  "uid": "rag-arama-loglari",
+  "version": 1,
+  "weekStart": ""
+}
