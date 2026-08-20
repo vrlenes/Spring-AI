@@ -24,17 +24,13 @@ function TalepListesiTablosu({ talepler }: { talepler: TalepOzeti[] }) {
         <tbody>
           {talepler.map((t) => (
             <tr key={t.takipNo} className="border-t">
-              <td className="px-2.5 py-1.5 font-mono text-[11px] whitespace-nowrap">{t.takipNo}</td>
-              <td className="max-w-[220px] truncate px-2.5 py-1.5" title={t.konuMetni}>
-                {t.konuMetni}
-              </td>
-              <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">
-                {t.mudurlukAdi ?? '(atanmamış)'}
-              </td>
-              <td className="px-2.5 py-1.5">
+              <td className="px-2.5 py-1.5 align-top font-mono text-[11px] whitespace-nowrap">{t.takipNo}</td>
+              <td className="max-w-[260px] px-2.5 py-1.5 align-top break-words">{t.konuMetni}</td>
+              <td className="px-2.5 py-1.5 align-top text-muted-foreground">{t.mudurlukAdi ?? '(atanmamış)'}</td>
+              <td className="px-2.5 py-1.5 align-top whitespace-nowrap">
                 <DurumRozeti durum={t.durum} />
               </td>
-              <td className="px-2.5 py-1.5">
+              <td className="px-2.5 py-1.5 align-top whitespace-nowrap">
                 <OncelikMetni oncelik={t.oncelik} />
               </td>
             </tr>
