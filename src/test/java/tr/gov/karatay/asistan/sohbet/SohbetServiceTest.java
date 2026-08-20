@@ -2,6 +2,7 @@ package tr.gov.karatay.asistan.sohbet;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,6 +19,7 @@ import org.mockito.quality.Strictness;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import tr.gov.karatay.asistan.chat.dto.Kaynak;
+import tr.gov.karatay.asistan.chat.dto.YapisalVeriPaketi;
 import tr.gov.karatay.asistan.common.enums.MesajRolu;
 import tr.gov.karatay.asistan.common.enums.SohbetModu;
 import tr.gov.karatay.asistan.personel.Personel;
@@ -123,7 +125,7 @@ class SohbetServiceTest {
             Sohbet sohbet = ornekSohbet("id-1", null);
             when(sohbetRepository.findById("id-1")).thenReturn(Optional.of(sohbet));
 
-            sohbetService.mesajEkle("id-1", MesajRolu.KULLANICI, "Merhaba, bir sorum var", null, null, null);
+            sohbetService.mesajEkle("id-1", MesajRolu.KULLANICI, "Merhaba, bir sorum var", null, null, null, null);
 
             ArgumentCaptor<Sohbet> captor = ArgumentCaptor.forClass(Sohbet.class);
             verify(sohbetRepository).save(captor.capture());
@@ -136,7 +138,7 @@ class SohbetServiceTest {
             when(sohbetRepository.findById("id-1")).thenReturn(Optional.of(sohbet));
             String uzunMesaj = "a".repeat(100);
 
-            sohbetService.mesajEkle("id-1", MesajRolu.KULLANICI, uzunMesaj, null, null, null);
+            sohbetService.mesajEkle("id-1", MesajRolu.KULLANICI, uzunMesaj, null, null, null, null);
 
             ArgumentCaptor<Sohbet> captor = ArgumentCaptor.forClass(Sohbet.class);
             verify(sohbetRepository).save(captor.capture());
@@ -148,7 +150,7 @@ class SohbetServiceTest {
             Sohbet sohbet = ornekSohbet("id-1", "Var olan başlık");
             when(sohbetRepository.findById("id-1")).thenReturn(Optional.of(sohbet));
 
-            sohbetService.mesajEkle("id-1", MesajRolu.KULLANICI, "Yeni mesaj", null, null, null);
+            sohbetService.mesajEkle("id-1", MesajRolu.KULLANICI, "Yeni mesaj", null, null, null, null);
 
             ArgumentCaptor<Sohbet> captor = ArgumentCaptor.forClass(Sohbet.class);
             verify(sohbetRepository).save(captor.capture());
@@ -160,7 +162,7 @@ class SohbetServiceTest {
             Sohbet sohbet = ornekSohbet("id-1", null);
             when(sohbetRepository.findById("id-1")).thenReturn(Optional.of(sohbet));
 
-            sohbetService.mesajEkle("id-1", MesajRolu.ASISTAN, "Cevap metni", null, null, null);
+            sohbetService.mesajEkle("id-1", MesajRolu.ASISTAN, "Cevap metni", null, null, null, null);
 
             ArgumentCaptor<Sohbet> captor = ArgumentCaptor.forClass(Sohbet.class);
             verify(sohbetRepository).save(captor.capture());
@@ -168,15 +170,17 @@ class SohbetServiceTest {
         }
 
         @Test
-        void kaynaklarAraclarBekleyenIslemJsonOlarakSaklanir() {
+        void kaynaklarAraclarBekleyenIslemYapisalVeriJsonOlarakSaklanir() {
             Sohbet sohbet = ornekSohbet("id-1", "Başlık");
             when(sohbetRepository.findById("id-1")).thenReturn(Optional.of(sohbet));
             List<Kaynak> kaynaklar = List.of(new Kaynak("Belge", 1, 0.9));
             List<String> araclar = List.of("Talepler sorgulandı");
             PendingActionOzeti bekleyenIslem =
                     new PendingActionOzeti("pid-1", PendingActionTuru.MUDURLUGE_ATA, "TLP-2026-00001", "açıklama");
+            YapisalVeriPaketi yapisalVeri =
+                    new YapisalVeriPaketi("TALEP_LISTESI", List.of(Map.of("takipNo", "TLP-2026-00001")));
 
-            sohbetService.mesajEkle("id-1", MesajRolu.ASISTAN, "Cevap", kaynaklar, araclar, bekleyenIslem);
+            sohbetService.mesajEkle("id-1", MesajRolu.ASISTAN, "Cevap", kaynaklar, araclar, bekleyenIslem, yapisalVeri);
 
             ArgumentCaptor<SohbetMesaji> captor = ArgumentCaptor.forClass(SohbetMesaji.class);
             verify(sohbetMesajiRepository).save(captor.capture());
@@ -184,6 +188,7 @@ class SohbetServiceTest {
             assertThat(kaydedilen.getKaynaklar()).contains("Belge");
             assertThat(kaydedilen.getAraclar()).contains("Talepler sorgulandı");
             assertThat(kaydedilen.getBekleyenIslem()).contains("TLP-2026-00001");
+            assertThat(kaydedilen.getYapisalVeri()).contains("TALEP_LISTESI").contains("TLP-2026-00001");
         }
 
         @Test
@@ -191,20 +196,22 @@ class SohbetServiceTest {
             Sohbet sohbet = ornekSohbet("id-1", "Başlık");
             when(sohbetRepository.findById("id-1")).thenReturn(Optional.of(sohbet));
 
-            sohbetService.mesajEkle("id-1", MesajRolu.KULLANICI, "Mesaj", null, null, null);
+            sohbetService.mesajEkle("id-1", MesajRolu.KULLANICI, "Mesaj", null, null, null, null);
 
             ArgumentCaptor<SohbetMesaji> captor = ArgumentCaptor.forClass(SohbetMesaji.class);
             verify(sohbetMesajiRepository).save(captor.capture());
             assertThat(captor.getValue().getKaynaklar()).isNull();
             assertThat(captor.getValue().getAraclar()).isNull();
             assertThat(captor.getValue().getBekleyenIslem()).isNull();
+            assertThat(captor.getValue().getYapisalVeri()).isNull();
         }
 
         @Test
         void bulunmayanSohbeteMesajEklenemez() {
             when(sohbetRepository.findById("olmayan-id")).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> sohbetService.mesajEkle("olmayan-id", MesajRolu.KULLANICI, "Mesaj", null, null, null))
+            assertThatThrownBy(() ->
+                            sohbetService.mesajEkle("olmayan-id", MesajRolu.KULLANICI, "Mesaj", null, null, null, null))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }

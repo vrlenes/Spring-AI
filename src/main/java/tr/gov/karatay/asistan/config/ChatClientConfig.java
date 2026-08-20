@@ -63,6 +63,10 @@ public class ChatClientConfig {
               KESİNLİKLE KULLANMA - bu araçlar zaten hiçbir zaman anında
               uygulanmaz, her zaman "onay bekleniyor" şeklinde cevap ver.
             - Veri OKUYAN işlemleri (listeleme, arama) onay istemeden yapabilirsin.
+            - talepleriGetir aracının sonucu kullanıcıya AYRICA bir tabloda
+              gösterilecek - sen dönen listeyi satır satır TEKRAR YAZMA, sadece
+              1-2 cümlelik kısa bir özet/giriş cümlesi yaz (örn. "5 açık talep
+              bulundu, aşağıda listelendi.").
             - Bir talebi hangi müdürlüğe atayacağını belirlerken müdürlüklerin
               sorumluluk alanlarını dikkate al. Emin değilsen tahmin etme, sor.
             - Türkçe, resmi ama anlaşılır bir dille cevap ver. Gereksiz uzatma.
@@ -100,6 +104,10 @@ public class ChatClientConfig {
             - Aracı çağırmadan "yapıldı", "güncellendi", "atandı" gibi ifadeler
               KESİNLİKLE KULLANMA.
             - Veri OKUYAN işlemleri (listeleme, arama) onay istemeden yapabilirsin.
+            - talepleriGetir aracının sonucu kullanıcıya AYRICA bir tabloda
+              gösterilecek - sen dönen listeyi satır satır TEKRAR YAZMA, sadece
+              1-2 cümlelik kısa bir özet/giriş cümlesi yaz (örn. "5 açık talep
+              bulundu, aşağıda listelendi.").
             - Bir talebi hangi müdürlüğe atayacağını belirlerken müdürlüklerin
               sorumluluk alanlarını dikkate al. Emin değilsen tahmin etme, sor.
             - Talep dışı bir konu sorulursa (mevzuat, genel sohbet vb.) kibarca

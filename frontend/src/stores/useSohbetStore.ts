@@ -11,6 +11,7 @@ function mesajOzetindenChatMesaji(m: SohbetMesajOzeti): ChatMessage {
     kaynaklar: m.kaynaklar ?? undefined,
     araclar: m.araclar ?? undefined,
     bekleyenIslem: m.bekleyenIslem ?? undefined,
+    yapisalVeri: m.yapisalVeri ?? undefined,
   }
 }
 
@@ -111,6 +112,14 @@ export const useSohbetStore = create<SohbetStore>((set, get) => ({
         if (olay.type === 'araclar') {
           set((durum) => ({
             mesajlar: durum.mesajlar.map((m) => (m.id === asistanId ? { ...m, araclar: olay.araclar } : m)),
+          }))
+          return
+        }
+        if (olay.type === 'yapisalVeri') {
+          set((durum) => ({
+            mesajlar: durum.mesajlar.map((m) =>
+              m.id === asistanId ? { ...m, yapisalVeri: olay.yapisalVeri } : m,
+            ),
           }))
           return
         }

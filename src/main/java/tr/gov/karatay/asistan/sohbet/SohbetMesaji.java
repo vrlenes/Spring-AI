@@ -57,6 +57,9 @@ public class SohbetMesaji {
     @Column(name = "bekleyen_islem", columnDefinition = "TEXT")
     private String bekleyenIslem;
 
+    @Column(name = "yapisal_veri", columnDefinition = "TEXT")
+    private String yapisalVeri;
+
     @Column(name = "olusturma_tarihi", nullable = false)
     private LocalDateTime olusturmaTarihi;
 }

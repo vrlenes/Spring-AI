@@ -10,6 +10,7 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+import tr.gov.karatay.asistan.chat.dto.YapisalVeriPaketi;
 import tr.gov.karatay.asistan.common.enums.TalepDurumu;
 import tr.gov.karatay.asistan.common.enums.TalepOnceligi;
 import tr.gov.karatay.asistan.mudurluk.MudurlukService;
@@ -35,6 +36,8 @@ public class TalepTools {
 
     public static final String PENDING_ACTION_ID_SINK = "pendingActionIdSink";
     public static final String KULLANILAN_ARAC_SINK = "kullanilanAracSink";
+    public static final String YAPISAL_VERI_SINK = "yapisalVeriSink";
+    public static final String TIP_TALEP_LISTESI = "TALEP_LISTESI";
 
     private static final DateTimeFormatter TARIH_BICIMI = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
@@ -82,6 +85,7 @@ public class TalepTools {
         if (sonuc.isEmpty()) {
             return "Belirtilen kriterlere uyan talep bulunamadi.";
         }
+        kaydetYapisalVeri(toolContext, TIP_TALEP_LISTESI, sonuc);
         return sonuc.stream().map(this::ozetSatiri).collect(Collectors.joining("\n"));
     }
 
@@ -250,6 +254,21 @@ public class TalepTools {
         Object sink = toolContext.getContext().get(KULLANILAN_ARAC_SINK);
         if (sink instanceof List<?> liste) {
             ((List<String>) liste).add(etiket);
+        }
+    }
+
+    // Bir sohbet turunde SADECE ilk yapisal veri paketi kullaniciya gosterilir
+    // (bkz. ChatService - bekleyenIslem'in de sadece ilki gosterilmesiyle ayni
+    // ilke) - birden fazla okuma araci art arda cagrilsa bile mesaj basina
+    // tek bir kart karisikligi onler.
+    @SuppressWarnings("unchecked")
+    private void kaydetYapisalVeri(ToolContext toolContext, String tip, Object veri) {
+        if (toolContext == null) {
+            return;
+        }
+        Object sink = toolContext.getContext().get(YAPISAL_VERI_SINK);
+        if (sink instanceof List<?> liste) {
+            ((List<YapisalVeriPaketi>) liste).add(new YapisalVeriPaketi(tip, veri));
         }
     }
 

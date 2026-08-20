@@ -24,6 +24,7 @@ import reactor.core.publisher.Flux;
 import tr.gov.karatay.asistan.chat.dto.ChatRequest;
 import tr.gov.karatay.asistan.chat.dto.ChatResponse;
 import tr.gov.karatay.asistan.chat.dto.Kaynak;
+import tr.gov.karatay.asistan.chat.dto.YapisalVeriPaketi;
 import tr.gov.karatay.asistan.common.CokFazlaIstekException;
 import tr.gov.karatay.asistan.common.LlmEsZamanliSinirlayici;
 import tr.gov.karatay.asistan.common.enums.MesajRolu;
@@ -88,8 +89,9 @@ public class ChatService {
         List<Kaynak> kaynaklar = kaynaklarBul(istek.mesaj(), mod);
         List<String> bekleyenIslemIdleri = new ArrayList<>();
         List<String> kullanilanAraclar = new ArrayList<>();
+        List<YapisalVeriPaketi> yapisalVeriListesi = new ArrayList<>();
 
-        sohbetService.mesajEkle(conversationId, MesajRolu.KULLANICI, istek.mesaj(), null, null, null);
+        sohbetService.mesajEkle(conversationId, MesajRolu.KULLANICI, istek.mesaj(), null, null, null, null);
 
         // .system(...) SADECE TALEP modundayken cagirilir: Spring AI'de bu
         // metot cagrilirsa builder'daki defaultSystem'i o istek icin
@@ -102,7 +104,8 @@ public class ChatService {
         final ChatClient.ChatClientRequestSpec sonIstekSpec = istekSpec
                 .toolContext(Map.of(
                         TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri,
-                        TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar))
+                        TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar,
+                        TalepTools.YAPISAL_VERI_SINK, yapisalVeriListesi))
                 .advisors(a -> {
                     a.param(ChatMemory.CONVERSATION_ID, conversationId);
                     if (!kaynaklar.isEmpty()) {
@@ -116,7 +119,9 @@ public class ChatService {
         String cevapMetni = metniCikar(yanit);
         List<String> araclar = benzersiz(kullanilanAraclar);
         PendingActionOzeti bekleyenIslem = bekleyenIslemBul(bekleyenIslemIdleri);
-        sohbetService.mesajEkle(conversationId, MesajRolu.ASISTAN, cevapMetni, bosMu(kaynaklar), bosMu(araclar), bekleyenIslem);
+        YapisalVeriPaketi yapisalVeri = yapisalVeriListesi.isEmpty() ? null : yapisalVeriListesi.get(0);
+        sohbetService.mesajEkle(
+                conversationId, MesajRolu.ASISTAN, cevapMetni, bosMu(kaynaklar), bosMu(araclar), bekleyenIslem, yapisalVeri);
 
         log.info(
                 "Sohbet yaniti uretildi: conversationId={}, mod={}, kaynakSayisi={}, kullanilanArac={}",
@@ -125,7 +130,7 @@ public class ChatService {
                 kaynaklar.size(),
                 araclar);
 
-        return new ChatResponse(conversationId, cevapMetni, kaynaklar, bekleyenIslem, araclar);
+        return new ChatResponse(conversationId, cevapMetni, kaynaklar, bekleyenIslem, araclar, yapisalVeri);
     }
 
     public Flux<ServerSentEvent<String>> akisliYanitla(ChatRequest istek, Long personelId) {
@@ -146,9 +151,10 @@ public class ChatService {
         List<Kaynak> kaynaklar = kaynaklarBul(istek.mesaj(), mod);
         List<String> bekleyenIslemIdleri = new ArrayList<>();
         List<String> kullanilanAraclar = new ArrayList<>();
+        List<YapisalVeriPaketi> yapisalVeriListesi = new ArrayList<>();
         StringBuilder birikenMetin = new StringBuilder();
 
-        sohbetService.mesajEkle(conversationId, MesajRolu.KULLANICI, istek.mesaj(), null, null, null);
+        sohbetService.mesajEkle(conversationId, MesajRolu.KULLANICI, istek.mesaj(), null, null, null, null);
 
         Flux<ServerSentEvent<String>> conversationIdOlayi = Flux.just(
                 ServerSentEvent.builder(conversationId).event("conversationId").build());
@@ -161,7 +167,8 @@ public class ChatService {
         Flux<ServerSentEvent<String>> tokenOlaylari = akisIstekSpec
                 .toolContext(Map.of(
                         TalepTools.PENDING_ACTION_ID_SINK, bekleyenIslemIdleri,
-                        TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar))
+                        TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar,
+                        TalepTools.YAPISAL_VERI_SINK, yapisalVeriListesi))
                 .advisors(a -> {
                     a.param(ChatMemory.CONVERSATION_ID, conversationId);
                     if (!kaynaklar.isEmpty()) {
@@ -217,11 +224,24 @@ public class ChatService {
             }
         });
 
-        return Flux.concat(conversationIdOlayi, tokenOlaylari, kaynakOlayi, bekleyenIslemOlayi, araclarOlayi)
+        Flux<ServerSentEvent<String>> yapisalVeriOlayi = Flux.defer(() -> {
+            if (yapisalVeriListesi.isEmpty()) {
+                return Flux.empty();
+            }
+            try {
+                String json = objectMapper.writeValueAsString(yapisalVeriListesi.get(0));
+                return Flux.just(ServerSentEvent.builder(json).event("yapisalVeri").build());
+            } catch (JsonProcessingException e) {
+                return Flux.empty();
+            }
+        });
+
+        return Flux.concat(conversationIdOlayi, tokenOlaylari, kaynakOlayi, bekleyenIslemOlayi, araclarOlayi, yapisalVeriOlayi)
                 .doFinally(sinyal -> {
                     llmSinirlayici.izinBirak();
                     List<String> araclar = benzersiz(kullanilanAraclar);
                     PendingActionOzeti bekleyenIslem = bekleyenIslemBul(bekleyenIslemIdleri);
+                    YapisalVeriPaketi yapisalVeri = yapisalVeriListesi.isEmpty() ? null : yapisalVeriListesi.get(0);
                     if (!birikenMetin.isEmpty()) {
                         sohbetService.mesajEkle(
                                 conversationId,
@@ -229,7 +249,8 @@ public class ChatService {
                                 birikenMetin.toString(),
                                 bosMu(kaynaklar),
                                 bosMu(araclar),
-                                bekleyenIslem);
+                                bekleyenIslem,
+                                yapisalVeri);
                     }
                     log.info(
                             "Akisli sohbet yaniti tamamlandi: conversationId={}, mod={}, kaynakSayisi={}, kullanilanArac={}, sinyal={}",

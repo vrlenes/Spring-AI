@@ -9,5 +9,6 @@ public record ChatResponse(
         String cevap,
         List<Kaynak> kaynaklar,
         PendingActionOzeti bekleyenIslem,
-        List<String> araclar) {
+        List<String> araclar,
+        YapisalVeriPaketi yapisalVeri) {
 }

@@ -12,6 +12,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import tr.gov.karatay.asistan.chat.dto.Kaynak;
+import tr.gov.karatay.asistan.chat.dto.YapisalVeriPaketi;
 import tr.gov.karatay.asistan.common.enums.MesajRolu;
 import tr.gov.karatay.asistan.common.enums.SohbetModu;
 import tr.gov.karatay.asistan.personel.PersonelRepository;
@@ -77,7 +78,8 @@ public class SohbetService {
             String icerik,
             List<Kaynak> kaynaklar,
             List<String> araclar,
-            PendingActionOzeti bekleyenIslem) {
+            PendingActionOzeti bekleyenIslem,
+            YapisalVeriPaketi yapisalVeri) {
         Sohbet sohbet = sohbetRepository
                 .findById(sohbetId)
                 .orElseThrow(() -> new IllegalArgumentException("\"%s\" id'li sohbet bulunamadı.".formatted(sohbetId)));
@@ -89,6 +91,7 @@ public class SohbetService {
         mesaj.setKaynaklar(yaz(kaynaklar));
         mesaj.setAraclar(yaz(araclar));
         mesaj.setBekleyenIslem(yaz(bekleyenIslem));
+        mesaj.setYapisalVeri(yaz(yapisalVeri));
         mesaj.setOlusturmaTarihi(LocalDateTime.now());
         sohbetMesajiRepository.save(mesaj);
 
@@ -117,6 +120,7 @@ public class SohbetService {
                 oku(mesaj.getKaynaklar(), new TypeReference<List<Kaynak>>() {}),
                 oku(mesaj.getAraclar(), new TypeReference<List<String>>() {}),
                 oku(mesaj.getBekleyenIslem(), new TypeReference<PendingActionOzeti>() {}),
+                oku(mesaj.getYapisalVeri(), new TypeReference<YapisalVeriPaketi>() {}),
                 mesaj.getOlusturmaTarihi());
     }
 
