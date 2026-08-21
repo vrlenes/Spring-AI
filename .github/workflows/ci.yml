@@ -1,0 +1,75 @@
+name: CI
+
+# Her push/PR'da backend testlerini ve frontend build'ini otomatik calistirir -
+# CLAUDE.md'nin "RAG'i etkileyen her degisiklikten sonra testleri calistir"
+# disiplinini elle hatirlamaya bagli olmaktan cikarir. Backend'deki gercek AI
+# cagrilari (chat/embedding) test kapsaminda YOK - testler Mockito ile
+# ChatClient'i sahteler (bkz. *ServiceTest siniflari), o yuzden gercek bir
+# GOOGLE_API_KEY veya calisir Ollama gerekmez; GOOGLE_API_KEY sadece Spring'in
+# ${GOOGLE_API_KEY} placeholder'ini cozebilmesi icin sahte bir degerle
+# doldurulur.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      GOOGLE_API_KEY: ci-dummy-key
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 21 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # kurum_dizini ikinci veritabani (bkz. KurumDizinDataSourceConfig)
+      # Testcontainers ile degil, dogrudan bu gercek Postgres'e baglanir - ayni
+      # yerel gelistirme ortamindaki gibi (bkz. compose.yaml yorumlari).
+      - name: Postgres'i baslat (docker compose)
+        run: docker compose up -d db
+
+      - name: Postgres saglikli olana kadar bekle
+        run: |
+          for i in $(seq 1 30); do
+            durum=$(docker inspect --format='{{.State.Health.Status}}' "$(docker compose ps -q db)")
+            if [ "$durum" = "healthy" ]; then
+              echo "Postgres hazir"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Postgres 60 saniyede saglikli olmadi"
+          exit 1
+
+      - name: mvnw calistirilabilir yap
+        run: chmod +x mvnw
+
+      - name: Backend testlerini calistir
+        run: ./mvnw test
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node kur
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Bagimliliklari kur
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend build (tsc + vite)
+        working-directory: frontend
+        run: npm run build
