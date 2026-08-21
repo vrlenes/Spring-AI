@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import tr.gov.karatay.asistan.chat.dto.Kaynak;
 import tr.gov.karatay.asistan.chat.dto.YapisalVeriPaketi;
+import tr.gov.karatay.asistan.common.enums.GeriBildirim;
 import tr.gov.karatay.asistan.common.enums.MesajRolu;
 import tr.gov.karatay.asistan.common.enums.SohbetModu;
 import tr.gov.karatay.asistan.personel.PersonelRepository;
@@ -64,6 +65,22 @@ public class SohbetService {
                 .toList();
     }
 
+    // Konusma ortasinda mod degistirilebilmesini destekler (bkz. kullanici
+    // talebi) - Sohbet.mod aslinda sohbetin akisini ETKILEMEZ (ChatService her
+    // mesajda modu istekten okur, bkz. modCoz), sadece sidebar'daki gosterim/
+    // arama icin saklanir. Bu yuzden burada guncellemek GUVENLI - LLM
+    // baglaminda/sistem promptunda hicbir sey degismez, sadece etiket
+    // gunceli kalir.
+    @Transactional
+    public void modGuncelle(String sohbetId, SohbetModu mod) {
+        sohbetRepository.findById(sohbetId).ifPresent(sohbet -> {
+            if (sohbet.getMod() != mod) {
+                sohbet.setMod(mod);
+                sohbetRepository.save(sohbet);
+            }
+        });
+    }
+
     @Transactional(readOnly = true)
     public List<SohbetMesajOzeti> mesajlariGetir(String sohbetId, Long personelId) {
         sahiplikDogrula(sohbetId, personelId);
@@ -73,7 +90,7 @@ public class SohbetService {
     }
 
     @Transactional
-    public void mesajEkle(
+    public Long mesajEkle(
             String sohbetId,
             MesajRolu rol,
             String icerik,
@@ -81,11 +98,14 @@ public class SohbetService {
             List<String> araclar,
             PendingActionOzeti bekleyenIslem,
             YapisalVeriPaketi yapisalVeri) {
-        mesajEkle(sohbetId, rol, icerik, kaynaklar, araclar, bekleyenIslem, yapisalVeri, null);
+        return mesajEkle(sohbetId, rol, icerik, kaynaklar, araclar, bekleyenIslem, yapisalVeri, null);
     }
 
+    // Donen id (ASISTAN mesajlarinda) frontend'e ChatResponse/SSE ile geri
+    // gonderilip geri bildirim (begen/begenme) butonlarinin dogru mesaji
+    // hedeflemesini saglar - bkz. ChatService.
     @Transactional
-    public void mesajEkle(
+    public Long mesajEkle(
             String sohbetId,
             MesajRolu rol,
             String icerik,
@@ -112,13 +132,30 @@ public class SohbetService {
             mesaj.setEkDosyaAdi(ek.dosyaAdi());
         }
         mesaj.setOlusturmaTarihi(LocalDateTime.now());
-        sohbetMesajiRepository.save(mesaj);
+        SohbetMesaji kaydedilen = sohbetMesajiRepository.save(mesaj);
 
         if (sohbet.getBaslik() == null && rol == MesajRolu.KULLANICI) {
             sohbet.setBaslik(baslikUret(icerik));
         }
         sohbet.setGuncellemeTarihi(LocalDateTime.now());
         sohbetRepository.save(sohbet);
+        return kaydedilen.getId();
+    }
+
+    // Sadece ASISTAN mesajlarina geri bildirim verilebilir - kullanicinin
+    // kendi mesajini begenmesi/begenmemesi anlamsiz. deger null verilirse
+    // geri bildirim geri alinir (toggle-off, bkz. frontend).
+    @Transactional
+    public SohbetMesajOzeti geriBildirimVer(String sohbetId, Long mesajId, Long personelId, GeriBildirim deger) {
+        sahiplikDogrula(sohbetId, personelId);
+        SohbetMesaji mesaj = sohbetMesajiRepository
+                .findByIdAndSohbetId(mesajId, sohbetId)
+                .orElseThrow(() -> new IllegalArgumentException("\"%d\" id'li mesaj bulunamadı.".formatted(mesajId)));
+        if (mesaj.getRol() != MesajRolu.ASISTAN) {
+            throw new IllegalArgumentException("Sadece asistan mesajlarına geri bildirim verilebilir.");
+        }
+        mesaj.setGeriBildirim(deger);
+        return ozetleVer(sohbetMesajiRepository.save(mesaj));
     }
 
     @Transactional(readOnly = true)
@@ -155,6 +192,7 @@ public class SohbetService {
                 oku(mesaj.getYapisalVeri(), new TypeReference<YapisalVeriPaketi>() {}),
                 mesaj.getEkMimeTipi(),
                 mesaj.getEkDosyaAdi(),
+                mesaj.getGeriBildirim(),
                 mesaj.getOlusturmaTarihi());
     }
 

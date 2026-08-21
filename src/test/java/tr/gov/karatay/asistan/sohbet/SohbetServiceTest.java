@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import tr.gov.karatay.asistan.chat.dto.Kaynak;
 import tr.gov.karatay.asistan.chat.dto.YapisalVeriPaketi;
+import tr.gov.karatay.asistan.common.enums.GeriBildirim;
 import tr.gov.karatay.asistan.common.enums.MesajRolu;
 import tr.gov.karatay.asistan.common.enums.SohbetModu;
 import tr.gov.karatay.asistan.personel.Personel;
@@ -60,6 +61,7 @@ class SohbetServiceTest {
     void hazirla() {
         sohbetService = new SohbetService(sohbetRepository, sohbetMesajiRepository, personelRepository, new ObjectMapper());
         when(sohbetRepository.save(any(Sohbet.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(sohbetMesajiRepository.save(any(SohbetMesaji.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
     private Personel ornekPersonel(long id) {
@@ -251,6 +253,83 @@ class SohbetServiceTest {
             when(sohbetRepository.findByIdAndPersonelId("id-1", 2L)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> sohbetService.mesajlariGetir("id-1", 2L))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    class ModGuncelleTestleri {
+
+        @Test
+        void modDegistiyseGuncellenirVeKaydedilir() {
+            Sohbet sohbet = ornekSohbet("id-1", "Başlık");
+            when(sohbetRepository.findById("id-1")).thenReturn(Optional.of(sohbet));
+
+            sohbetService.modGuncelle("id-1", SohbetModu.TALEP);
+
+            assertThat(sohbet.getMod()).isEqualTo(SohbetModu.TALEP);
+            verify(sohbetRepository).save(sohbet);
+        }
+
+        @Test
+        void modAyniysaKaydetmeyeGerekYok() {
+            Sohbet sohbet = ornekSohbet("id-1", "Başlık");
+            when(sohbetRepository.findById("id-1")).thenReturn(Optional.of(sohbet));
+
+            sohbetService.modGuncelle("id-1", SohbetModu.GENEL);
+
+            verify(sohbetRepository, org.mockito.Mockito.never()).save(any(Sohbet.class));
+        }
+
+        @Test
+        void bulunmayanSohbetSessizceYokSayilir() {
+            when(sohbetRepository.findById("olmayan-id")).thenReturn(Optional.empty());
+
+            sohbetService.modGuncelle("olmayan-id", SohbetModu.TALEP);
+
+            verify(sohbetRepository, org.mockito.Mockito.never()).save(any(Sohbet.class));
+        }
+    }
+
+    @Nested
+    class GeriBildirimVerTestleri {
+
+        @Test
+        void asistanMesajinaGeriBildirimVerilirVeSaklanir() {
+            Sohbet sohbet = ornekSohbet("id-1", "Başlık");
+            when(sohbetRepository.findByIdAndPersonelId("id-1", 1L)).thenReturn(Optional.of(sohbet));
+            SohbetMesaji mesaj = new SohbetMesaji();
+            mesaj.setId(5L);
+            mesaj.setSohbet(sohbet);
+            mesaj.setRol(MesajRolu.ASISTAN);
+            mesaj.setIcerik("Cevap metni");
+            when(sohbetMesajiRepository.findByIdAndSohbetId(5L, "id-1")).thenReturn(Optional.of(mesaj));
+
+            SohbetMesajOzeti sonuc = sohbetService.geriBildirimVer("id-1", 5L, 1L, GeriBildirim.OLUMLU);
+
+            assertThat(sonuc.geriBildirim()).isEqualTo(GeriBildirim.OLUMLU);
+        }
+
+        @Test
+        void kullaniciMesajinaGeriBildirimVerilemez() {
+            Sohbet sohbet = ornekSohbet("id-1", "Başlık");
+            when(sohbetRepository.findByIdAndPersonelId("id-1", 1L)).thenReturn(Optional.of(sohbet));
+            SohbetMesaji mesaj = new SohbetMesaji();
+            mesaj.setId(5L);
+            mesaj.setSohbet(sohbet);
+            mesaj.setRol(MesajRolu.KULLANICI);
+            mesaj.setIcerik("Soru metni");
+            when(sohbetMesajiRepository.findByIdAndSohbetId(5L, "id-1")).thenReturn(Optional.of(mesaj));
+
+            assertThatThrownBy(() -> sohbetService.geriBildirimVer("id-1", 5L, 1L, GeriBildirim.OLUMSUZ))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void baskaPersonelinSohbetineGeriBildirimVerilemez() {
+            when(sohbetRepository.findByIdAndPersonelId("id-1", 2L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> sohbetService.geriBildirimVer("id-1", 5L, 2L, GeriBildirim.OLUMLU))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }

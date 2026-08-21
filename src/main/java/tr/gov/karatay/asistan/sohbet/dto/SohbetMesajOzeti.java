@@ -5,6 +5,7 @@ import java.util.List;
 
 import tr.gov.karatay.asistan.chat.dto.Kaynak;
 import tr.gov.karatay.asistan.chat.dto.YapisalVeriPaketi;
+import tr.gov.karatay.asistan.common.enums.GeriBildirim;
 import tr.gov.karatay.asistan.common.enums.MesajRolu;
 import tr.gov.karatay.asistan.talep.dto.PendingActionOzeti;
 
@@ -18,5 +19,6 @@ public record SohbetMesajOzeti(
         YapisalVeriPaketi yapisalVeri,
         String ekMimeTipi,
         String ekDosyaAdi,
+        GeriBildirim geriBildirim,
         LocalDateTime olusturmaTarihi) {
 }

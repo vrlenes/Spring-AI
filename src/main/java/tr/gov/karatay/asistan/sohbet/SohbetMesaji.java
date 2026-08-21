@@ -18,6 +18,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import tr.gov.karatay.asistan.common.enums.GeriBildirim;
 import tr.gov.karatay.asistan.common.enums.MesajRolu;
 
 // kaynaklar/araclar/bekleyenIslem JSON string olarak (TEXT kolon) tutulur -
@@ -59,6 +60,12 @@ public class SohbetMesaji {
 
     @Column(name = "yapisal_veri", columnDefinition = "TEXT")
     private String yapisalVeri;
+
+    // Sadece ASISTAN mesajlarinda anlamli - kullanicinin cevaba verdigi
+    // begen/begenme geri bildirimi (bkz. SohbetService.geriBildirimVer).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "geri_bildirim", length = 10)
+    private GeriBildirim geriBildirim;
 
     // Mesaja ozel, gecici bir ek (gorsel/PDF) - kalici RAG doküman havuzuna
     // (Dokuman/vector_store) DAHIL DEGIL, sadece bu mesajin Gemini'ye
