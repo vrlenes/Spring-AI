@@ -19,6 +19,7 @@ import tr.gov.karatay.asistan.talep.dto.SiniflandirmaOnerisi;
 import tr.gov.karatay.asistan.talep.dto.TalepDetay;
 import tr.gov.karatay.asistan.talep.dto.TalepIstatistik;
 import tr.gov.karatay.asistan.talep.dto.TalepOzeti;
+import tr.gov.karatay.asistan.talep.dto.TopluIslemSonucu;
 import tr.gov.karatay.asistan.talep.dto.TopluSiniflandirmaOnerisi;
 
 // Sohbetten bagimsiz, dogrudan REST uzerinden calisan talep yonetim ekrani icin.
@@ -111,6 +112,17 @@ public class TalepController {
         return talepService.talebeNotEkle(takipNo, istek.notMetni(), istek.personel());
     }
 
+    @PostMapping("/toplu/durum")
+    public List<TopluIslemSonucu> topluDurumGuncelle(@RequestBody TopluDurumGuncelleIstek istek) {
+        return talepService.talepleriTopluDurumGuncelle(
+                istek.takipNolar(), TalepDurumu.valueOf(istek.durum().trim().toUpperCase(Locale.ROOT)));
+    }
+
+    @PostMapping("/toplu/mudurluk")
+    public List<TopluIslemSonucu> topluMudurlugeAta(@RequestBody TopluMudurlukAtaIstek istek) {
+        return talepService.talepleriTopluMudurlugeAta(istek.takipNolar(), istek.mudurlukAdi());
+    }
+
     private TalepDurumu durumCoz(String durum) {
         return durum == null || durum.isBlank() ? null : TalepDurumu.valueOf(durum.trim().toUpperCase(Locale.ROOT));
     }
@@ -128,5 +140,11 @@ public class TalepController {
     }
 
     public record NotEkleIstek(String notMetni, String personel) {
+    }
+
+    public record TopluDurumGuncelleIstek(List<String> takipNolar, String durum) {
+    }
+
+    public record TopluMudurlukAtaIstek(List<String> takipNolar, String mudurlukAdi) {
     }
 }

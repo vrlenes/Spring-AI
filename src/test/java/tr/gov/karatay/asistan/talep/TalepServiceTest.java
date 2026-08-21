@@ -24,6 +24,7 @@ import tr.gov.karatay.asistan.talep.dto.PendingActionTeklifi;
 import tr.gov.karatay.asistan.talep.dto.TalepDetay;
 import tr.gov.karatay.asistan.talep.dto.TalepIstatistik;
 import tr.gov.karatay.asistan.talep.dto.TalepOzeti;
+import tr.gov.karatay.asistan.talep.dto.TopluIslemSonucu;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -185,6 +186,56 @@ class TalepServiceTest {
                     .containsEntry("ATANDI", 0L)
                     .containsEntry("ISLEMDE", 0L);
         }
+
+        @Test
+        void gunlukTrend_istenenGunSayisiKadarKayitDonerVeBugunuDogruSayar() {
+            Talep bugunTalebi = ornekTalep("TLP-1", TalepOnceligi.NORMAL, TalepDurumu.YENI);
+            bugunTalebi.setOlusturmaTarihi(LocalDateTime.now());
+            when(talepRepository.findAll(any(Specification.class))).thenReturn(List.of(bugunTalebi));
+
+            TalepIstatistik istatistik = talepService.talepIstatistik(7, null);
+
+            assertThat(istatistik.gunlukTrend()).hasSize(7);
+            assertThat(istatistik.gunlukTrend().get(6).tarih()).isEqualTo(java.time.LocalDate.now());
+            assertThat(istatistik.gunlukTrend().get(6).sayi()).isEqualTo(1L);
+            assertThat(istatistik.gunlukTrend().get(0).sayi()).isEqualTo(0L);
+        }
+
+        @Test
+        void gunlukTrend_doksanGundenFazlaIstenirseBosDoner() {
+            when(talepRepository.findAll(any(Specification.class))).thenReturn(List.of());
+
+            TalepIstatistik istatistik = talepService.talepIstatistik(180, null);
+
+            assertThat(istatistik.gunlukTrend()).isEmpty();
+        }
+
+        @Test
+        void ortalamaCozumSuresi_guncellemeTarihiOlanCozulenlerdenHesaplanir() {
+            Talep cozulenBir = ornekTalep("TLP-1", TalepOnceligi.NORMAL, TalepDurumu.COZULDU);
+            LocalDateTime simdi = LocalDateTime.now();
+            cozulenBir.setOlusturmaTarihi(simdi.minusHours(10));
+            cozulenBir.setGuncellemeTarihi(simdi);
+
+            Talep guncellemesizCozulen = ornekTalep("TLP-2", TalepOnceligi.NORMAL, TalepDurumu.COZULDU);
+            guncellemesizCozulen.setGuncellemeTarihi(null);
+
+            when(talepRepository.findAll(any(Specification.class))).thenReturn(List.of(cozulenBir, guncellemesizCozulen));
+
+            TalepIstatistik istatistik = talepService.talepIstatistik(30, null);
+
+            assertThat(istatistik.ortalamaCozumSuresiSaat()).isEqualTo(10.0);
+        }
+
+        @Test
+        void ortalamaCozumSuresi_cozulenYoksaNullDoner() {
+            when(talepRepository.findAll(any(Specification.class)))
+                    .thenReturn(List.of(ornekTalep("TLP-1", TalepOnceligi.NORMAL, TalepDurumu.YENI)));
+
+            TalepIstatistik istatistik = talepService.talepIstatistik(30, null);
+
+            assertThat(istatistik.ortalamaCozumSuresiSaat()).isNull();
+        }
     }
 
     @Nested
@@ -305,6 +356,70 @@ class TalepServiceTest {
                     .isInstanceOf(IllegalArgumentException.class);
             verify(talepRepository, never()).save(any());
             verify(talepNotuRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    class TopluIslemTestleri {
+
+        @Test
+        void topluDurumGuncelle_hepsiBulunursaHepsiBasarili() {
+            Talep birinci = ornekTalep("TLP-1", TalepOnceligi.NORMAL, TalepDurumu.YENI);
+            Talep ikinci = ornekTalep("TLP-2", TalepOnceligi.NORMAL, TalepDurumu.YENI);
+            when(talepRepository.findByTakipNo("TLP-1")).thenReturn(Optional.of(birinci));
+            when(talepRepository.findByTakipNo("TLP-2")).thenReturn(Optional.of(ikinci));
+
+            List<TopluIslemSonucu> sonuc =
+                    talepService.talepleriTopluDurumGuncelle(List.of("TLP-1", "TLP-2"), TalepDurumu.ISLEMDE);
+
+            assertThat(sonuc).hasSize(2);
+            assertThat(sonuc).allMatch(TopluIslemSonucu::basarili);
+            verify(talepRepository, times(2)).save(any());
+        }
+
+        @Test
+        void topluDurumGuncelle_bulunamayanKayitDigerlerinEtkilemez() {
+            Talep bulunan = ornekTalep("TLP-1", TalepOnceligi.NORMAL, TalepDurumu.YENI);
+            when(talepRepository.findByTakipNo("TLP-1")).thenReturn(Optional.of(bulunan));
+            when(talepRepository.findByTakipNo("TLP-99999")).thenReturn(Optional.empty());
+
+            List<TopluIslemSonucu> sonuc =
+                    talepService.talepleriTopluDurumGuncelle(List.of("TLP-1", "TLP-99999"), TalepDurumu.ISLEMDE);
+
+            assertThat(sonuc).hasSize(2);
+            assertThat(sonuc).filteredOn(TopluIslemSonucu::takipNo, "TLP-1").first().satisfies(
+                    s -> assertThat(s.basarili()).isTrue());
+            assertThat(sonuc).filteredOn(TopluIslemSonucu::takipNo, "TLP-99999").first().satisfies(s -> {
+                assertThat(s.basarili()).isFalse();
+                assertThat(s.hata()).contains("TLP-99999");
+            });
+            verify(talepRepository, times(1)).save(any());
+        }
+
+        @Test
+        void topluDurumGuncelle_ellidenFazlaKayitSertLimiteKesilir() {
+            Talep talep = ornekTalep("TLP-X", TalepOnceligi.NORMAL, TalepDurumu.YENI);
+            when(talepRepository.findByTakipNo(any())).thenReturn(Optional.of(talep));
+            List<String> altmisKayit =
+                    java.util.stream.IntStream.range(0, 60).mapToObj(i -> "TLP-" + i).toList();
+
+            List<TopluIslemSonucu> sonuc = talepService.talepleriTopluDurumGuncelle(altmisKayit, TalepDurumu.ISLEMDE);
+
+            assertThat(sonuc).hasSize(50);
+        }
+
+        @Test
+        void topluMudurlugeAta_mudurlukBulunamazsaOKaydinSonucuBasarisiz() {
+            Talep talep = ornekTalep("TLP-1", TalepOnceligi.NORMAL, TalepDurumu.YENI);
+            when(talepRepository.findByTakipNo("TLP-1")).thenReturn(Optional.of(talep));
+            when(mudurlukRepository.findByAdIgnoreCase("Olmayan Müdürlük")).thenReturn(Optional.empty());
+
+            List<TopluIslemSonucu> sonuc =
+                    talepService.talepleriTopluMudurlugeAta(List.of("TLP-1"), "Olmayan Müdürlük");
+
+            assertThat(sonuc).hasSize(1);
+            assertThat(sonuc.get(0).basarili()).isFalse();
+            verify(talepRepository, never()).save(any());
         }
     }
 }

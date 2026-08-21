@@ -1,11 +1,16 @@
 package tr.gov.karatay.asistan.talep;
 
+import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,17 +23,21 @@ import tr.gov.karatay.asistan.common.enums.TalepDurumu;
 import tr.gov.karatay.asistan.common.enums.TalepOnceligi;
 import tr.gov.karatay.asistan.mudurluk.Mudurluk;
 import tr.gov.karatay.asistan.mudurluk.MudurlukRepository;
+import tr.gov.karatay.asistan.talep.dto.GunlukSayim;
 import tr.gov.karatay.asistan.talep.dto.PendingActionTeklifi;
 import tr.gov.karatay.asistan.talep.dto.TalepDetay;
 import tr.gov.karatay.asistan.talep.dto.TalepIstatistik;
 import tr.gov.karatay.asistan.talep.dto.TalepNotuOzeti;
 import tr.gov.karatay.asistan.talep.dto.TalepOzeti;
+import tr.gov.karatay.asistan.talep.dto.TopluIslemSonucu;
 
 @Service
 public class TalepService {
 
     private static final Logger log = LoggerFactory.getLogger(TalepService.class);
     private static final int LISTE_SERT_LIMIT = 20;
+    private static final int TOPLU_ISLEM_SERT_LIMIT = 50;
+    private static final int TREND_MAKS_GUN = 90;
 
     private final TalepRepository talepRepository;
     private final TalepNotuRepository talepNotuRepository;
@@ -93,7 +102,52 @@ public class TalepService {
             durumDagilimi.merge(t.getDurum().name(), 1L, Long::sum);
         }
 
-        return new TalepIstatistik(gunSayisi, mudurlukAdi, sonuclar.size(), durumDagilimi);
+        return new TalepIstatistik(
+                gunSayisi,
+                mudurlukAdi,
+                sonuclar.size(),
+                durumDagilimi,
+                gunlukTrendHesapla(sonuclar, gunSayisi),
+                ortalamaCozumSuresiHesapla(sonuclar));
+    }
+
+    // Trend, sadece makul (<=90 gun) bir aralik icin hesaplanir - daha buyuk
+    // bir aralikta gun basina cizgi grafik zaten okunakli olmaz. Talebin
+    // olustugu HER gun (sonuc bos bile olsa) listede yer alir ki frontend'deki
+    // grafik "bu gun hic talep yoktu" ile "bu gun hic sorgulanmadi" arasindaki
+    // farki karistirmasin.
+    private List<GunlukSayim> gunlukTrendHesapla(List<Talep> sonuclar, int gunSayisi) {
+        if (gunSayisi <= 0 || gunSayisi > TREND_MAKS_GUN) {
+            return List.of();
+        }
+        Map<LocalDate, Long> gunlukSayilar = new HashMap<>();
+        for (Talep t : sonuclar) {
+            gunlukSayilar.merge(t.getOlusturmaTarihi().toLocalDate(), 1L, Long::sum);
+        }
+        LocalDate bugun = LocalDate.now();
+        List<GunlukSayim> trend = new ArrayList<>();
+        for (int i = gunSayisi - 1; i >= 0; i--) {
+            LocalDate gun = bugun.minusDays(i);
+            trend.add(new GunlukSayim(gun, gunlukSayilar.getOrDefault(gun, 0L)));
+        }
+        return trend;
+    }
+
+    // Sadece guncellemeTarihi dolu (yani en az bir kez guncellenmis) COZULDU
+    // kayitlar dahil edilir - olusturulur olusturulmaz COZULDU olarak eklenen
+    // (guncellemeTarihi null) mock/seed veri, ortalamayi anlamsizca sifira
+    // cekmesin diye disarida birakilir.
+    private Double ortalamaCozumSuresiHesapla(List<Talep> sonuclar) {
+        List<Talep> cozulenler = sonuclar.stream()
+                .filter(t -> t.getDurum() == TalepDurumu.COZULDU && t.getGuncellemeTarihi() != null)
+                .toList();
+        if (cozulenler.isEmpty()) {
+            return null;
+        }
+        double toplamSaat = cozulenler.stream()
+                .mapToDouble(t -> Duration.between(t.getOlusturmaTarihi(), t.getGuncellemeTarihi()).toMinutes() / 60.0)
+                .sum();
+        return toplamSaat / cozulenler.size();
     }
 
     // Asagidaki dort "teklif olustur" metodu HICBIR SEY DEGISTIRMEZ - sadece
@@ -219,6 +273,35 @@ public class TalepService {
         notEkle(talep, personel == null || personel.isBlank() ? "Bilinmiyor" : personel, notMetni);
         log.info("Talebe not eklendi: takipNo={}", talep.getTakipNo());
         return detayVer(talep);
+    }
+
+    // Toplu islemler dogrudan TalepController'dan (yonetim ekrani, kullanicinin
+    // kendi sectigi kayitlar) cagrilir - PendingAction'a gerek yok, ayni
+    // TalepController'daki tekli yazma uclari gibi (bkz. o siniftaki yorum).
+    // Listedeki bir takipNo gecersizse/bulunamazsa TUM istek basarisiz olmaz -
+    // her kayit kendi sonucunu (basarili/hata) doner, digerleri etkilenmez.
+    @Transactional
+    public List<TopluIslemSonucu> talepleriTopluDurumGuncelle(List<String> takipNolar, TalepDurumu yeniDurum) {
+        return topluUygula(takipNolar, takipNo -> talepDurumGuncelle(takipNo, yeniDurum));
+    }
+
+    @Transactional
+    public List<TopluIslemSonucu> talepleriTopluMudurlugeAta(List<String> takipNolar, String mudurlukAdi) {
+        return topluUygula(takipNolar, takipNo -> talebiMudurlugeAta(takipNo, mudurlukAdi));
+    }
+
+    private List<TopluIslemSonucu> topluUygula(List<String> takipNolar, Consumer<String> islem) {
+        return takipNolar.stream()
+                .limit(TOPLU_ISLEM_SERT_LIMIT)
+                .map(takipNo -> {
+                    try {
+                        islem.accept(takipNo);
+                        return new TopluIslemSonucu(normalizeTakipNo(takipNo), true, null);
+                    } catch (IllegalArgumentException e) {
+                        return new TopluIslemSonucu(normalizeTakipNo(takipNo), false, e.getMessage());
+                    }
+                })
+                .toList();
     }
 
     private void notEkle(Talep talep, String personel, String notMetni) {
