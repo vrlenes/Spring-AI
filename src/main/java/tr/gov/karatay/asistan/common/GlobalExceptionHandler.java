@@ -30,6 +30,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("hata", e.getMessage()));
     }
 
+    @ExceptionHandler(YapayZekaGeciciHataException.class)
+    public ResponseEntity<Map<String, String>> yapayZekaGeciciHatasi(YapayZekaGeciciHataException e) {
+        log.warn("Yapay zeka servisi gecici olarak kullanilamiyor: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("hata", e.getMessage()));
+    }
+
     // Beklenmeyen her hata icin son çare: istemciye ic detaylari (stack trace,
     // SQL, vs.) SIZDIRMADAN genel bir mesaj donuyoruz, ama gercek hatayi
     // sunucu logunda tutuyoruz - aksi halde sorunu teshis etmek imkansiz olur.

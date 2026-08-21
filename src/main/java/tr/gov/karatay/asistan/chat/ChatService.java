@@ -25,12 +25,17 @@ import reactor.core.publisher.Flux;
 import tr.gov.karatay.asistan.chat.dto.ChatRequest;
 import tr.gov.karatay.asistan.chat.dto.ChatResponse;
 import tr.gov.karatay.asistan.chat.dto.Kaynak;
+import tr.gov.karatay.asistan.chat.dto.KaynakDogrulamaSonucu;
 import tr.gov.karatay.asistan.chat.dto.YapisalVeriPaketi;
 import tr.gov.karatay.asistan.common.CokFazlaIstekException;
 import tr.gov.karatay.asistan.common.LlmEsZamanliSinirlayici;
+import tr.gov.karatay.asistan.common.YapayZekaGeciciHataException;
+import tr.gov.karatay.asistan.common.YapayZekaHataYorumlayici;
+import tr.gov.karatay.asistan.common.enums.AracGrubu;
 import tr.gov.karatay.asistan.common.enums.MesajRolu;
 import tr.gov.karatay.asistan.common.enums.SohbetModu;
 import tr.gov.karatay.asistan.config.ChatClientConfig;
+import tr.gov.karatay.asistan.rag.KaynakDogrulamaService;
 import tr.gov.karatay.asistan.rag.RagTools;
 import tr.gov.karatay.asistan.sohbet.SohbetService;
 import tr.gov.karatay.asistan.sohbet.dto.EkVerisi;
@@ -79,18 +84,24 @@ public class ChatService {
     private final SohbetService sohbetService;
     private final ObjectMapper objectMapper;
     private final LlmEsZamanliSinirlayici llmSinirlayici;
+    private final ModYonlendirmeService modYonlendirmeService;
+    private final KaynakDogrulamaService kaynakDogrulamaService;
 
     public ChatService(
             ChatClient chatClient,
             PendingActionService pendingActionService,
             SohbetService sohbetService,
             ObjectMapper objectMapper,
-            LlmEsZamanliSinirlayici llmSinirlayici) {
+            LlmEsZamanliSinirlayici llmSinirlayici,
+            ModYonlendirmeService modYonlendirmeService,
+            KaynakDogrulamaService kaynakDogrulamaService) {
         this.chatClient = chatClient;
         this.pendingActionService = pendingActionService;
         this.sohbetService = sohbetService;
         this.objectMapper = objectMapper;
         this.llmSinirlayici = llmSinirlayici;
+        this.modYonlendirmeService = modYonlendirmeService;
+        this.kaynakDogrulamaService = kaynakDogrulamaService;
     }
 
     public ChatResponse yanitla(ChatRequest istek, Long personelId) {
@@ -98,12 +109,15 @@ public class ChatService {
     }
 
     public ChatResponse yanitla(ChatRequest istek, Long personelId, MultipartFile dosya) {
-        SohbetModu mod = modCoz(istek.mod());
-        String conversationId = sohbetIdCoz(istek.conversationId(), personelId, mod);
+        SohbetModu secilenMod = modCoz(istek.mod());
+        SohbetModu mod = secilenMod == SohbetModu.OTOMATIK ? modYonlendirmeService.yonlendir(istek.mesaj()) : secilenMod;
+        String conversationId = sohbetIdCoz(istek.conversationId(), personelId, secilenMod);
+        sohbetService.modGuncelle(conversationId, secilenMod);
         List<String> bekleyenIslemIdleri = new ArrayList<>();
         List<String> kullanilanAraclar = new ArrayList<>();
         List<YapisalVeriPaketi> yapisalVeriListesi = new ArrayList<>();
         List<Kaynak> kaynakListesi = new ArrayList<>();
+        List<String> hamMetinListesi = new ArrayList<>();
 
         EkIcerik ekIcerik = ekIcerigiHazirla(dosya);
         sohbetService.mesajEkle(
@@ -121,7 +135,7 @@ public class ChatService {
         // DEGISTIRIR - hicbir zaman "bos" bir Consumer ile cagirmiyoruz,
         // aksi halde GENEL modun ana sistem promptu kaybolabilir.
         ChatClient.ChatClientRequestSpec istekSpec = chatClient.prompt().user(us -> kullaniciMesajiOlustur(us, istek.mesaj(), ekIcerik));
-        String promptOverride = sistemPromptuOverride(mod);
+        String promptOverride = sistemPromptuOlustur(mod, istek.kapaliAraclar());
         if (promptOverride != null) {
             istekSpec = istekSpec.system(promptOverride);
         }
@@ -131,18 +145,19 @@ public class ChatService {
                         TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar,
                         TalepTools.YAPISAL_VERI_SINK, yapisalVeriListesi,
                         RagTools.KAYNAK_SINK, kaynakListesi,
+                        RagTools.HAM_METIN_SINK, hamMetinListesi,
                         RagTools.MOD_KEY, mod))
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId));
 
-        ChatClientResponse yanit =
-                llmSinirlayici.sinirliCagir(() -> sonIstekSpec.call().chatClientResponse());
+        ChatClientResponse yanit = anaCagriYap(sonIstekSpec);
 
         String cevapMetni = metniCikar(yanit);
         List<String> araclar = benzersiz(kullanilanAraclar);
         List<Kaynak> kaynaklar = benzersiz(kaynakListesi);
         PendingActionOzeti bekleyenIslem = bekleyenIslemBul(bekleyenIslemIdleri);
         YapisalVeriPaketi yapisalVeri = yapisalVeriListesi.isEmpty() ? null : yapisalVeriListesi.get(0);
-        sohbetService.mesajEkle(
+        KaynakDogrulamaSonucu dogrulama = kaynakDogrulamaService.dogrula(cevapMetni, hamMetinListesi);
+        Long mesajId = sohbetService.mesajEkle(
                 conversationId, MesajRolu.ASISTAN, cevapMetni, bosMu(kaynaklar), bosMu(araclar), bekleyenIslem, yapisalVeri);
 
         log.info(
@@ -152,7 +167,9 @@ public class ChatService {
                 kaynaklar.size(),
                 araclar);
 
-        return new ChatResponse(conversationId, cevapMetni, kaynaklar, bekleyenIslem, araclar, yapisalVeri);
+        SohbetModu algilananMod = secilenMod == SohbetModu.OTOMATIK ? mod : null;
+        return new ChatResponse(
+                conversationId, cevapMetni, kaynaklar, bekleyenIslem, araclar, yapisalVeri, algilananMod, mesajId, dogrulama);
     }
 
     public Flux<ServerSentEvent<String>> akisliYanitla(ChatRequest istek, Long personelId) {
@@ -172,12 +189,15 @@ public class ChatService {
                     "Sistem şu anda başka isteklerle meşgul, lütfen birkaç saniye sonra tekrar deneyin.");
         }
 
-        SohbetModu mod = modCoz(istek.mod());
-        String conversationId = sohbetIdCoz(istek.conversationId(), personelId, mod);
+        SohbetModu secilenMod = modCoz(istek.mod());
+        SohbetModu mod = secilenMod == SohbetModu.OTOMATIK ? modYonlendirmeService.yonlendir(istek.mesaj()) : secilenMod;
+        String conversationId = sohbetIdCoz(istek.conversationId(), personelId, secilenMod);
+        sohbetService.modGuncelle(conversationId, secilenMod);
         List<String> bekleyenIslemIdleri = new ArrayList<>();
         List<String> kullanilanAraclar = new ArrayList<>();
         List<YapisalVeriPaketi> yapisalVeriListesi = new ArrayList<>();
         List<Kaynak> kaynakListesi = new ArrayList<>();
+        List<String> hamMetinListesi = new ArrayList<>();
         StringBuilder birikenMetin = new StringBuilder();
 
         EkIcerik ekIcerik = ekIcerigiHazirla(dosya);
@@ -194,9 +214,17 @@ public class ChatService {
         Flux<ServerSentEvent<String>> conversationIdOlayi = Flux.just(
                 ServerSentEvent.builder(conversationId).event("conversationId").build());
 
+        // Sadece OTOMATIK modda gonderilir - frontend bunu token akisi
+        // baslamadan once alip "Otomatik: X modu algilandi" rozetini hemen
+        // gosterebilsin diye conversationId'den hemen sonra, token'lardan once
+        // sıraya konur (bkz. asagidaki Flux.concat).
+        Flux<ServerSentEvent<String>> algilananModOlayi = secilenMod == SohbetModu.OTOMATIK
+                ? Flux.just(ServerSentEvent.builder(mod.name()).event("algilananMod").build())
+                : Flux.empty();
+
         ChatClient.ChatClientRequestSpec akisIstekSpec =
                 chatClient.prompt().user(us -> kullaniciMesajiOlustur(us, istek.mesaj(), ekIcerik));
-        String akisPromptOverride = sistemPromptuOverride(mod);
+        String akisPromptOverride = sistemPromptuOlustur(mod, istek.kapaliAraclar());
         if (akisPromptOverride != null) {
             akisIstekSpec = akisIstekSpec.system(akisPromptOverride);
         }
@@ -207,6 +235,7 @@ public class ChatService {
                         TalepTools.KULLANILAN_ARAC_SINK, kullanilanAraclar,
                         TalepTools.YAPISAL_VERI_SINK, yapisalVeriListesi,
                         RagTools.KAYNAK_SINK, kaynakListesi,
+                        RagTools.HAM_METIN_SINK, hamMetinListesi,
                         RagTools.MOD_KEY, mod))
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .stream()
@@ -218,6 +247,19 @@ public class ChatService {
                     }
                     birikenMetin.append(parca);
                     return ServerSentEvent.builder(parca).event("token").build();
+                })
+                // Akis basladiktan (HTTP 200 gonderildikten) SONRA bir hata olursa
+                // (orn. Gemini kota/oran siniri) HTTP durum kodu artik degistirilemez -
+                // tek yol, akisin icine ozel bir "hata" olayi eklemek. Bu olmadan
+                // istemci akisin sessizce (yarim kalmis bir cevapla) bittigini
+                // gorurdu - hicbir sey yanlis gitmemis gibi.
+                .onErrorResume(RuntimeException.class, e -> {
+                    RuntimeException yorumlanan = YapayZekaHataYorumlayici.yorumla(e);
+                    log.warn("Akisli sohbet cagrisi hata ile sonuclandi: {}", e.getMessage());
+                    String mesaj = yorumlanan instanceof YapayZekaGeciciHataException
+                            ? yorumlanan.getMessage()
+                            : "Bir hata oluştu, lütfen tekrar deneyin.";
+                    return Flux.just(ServerSentEvent.builder(mesaj).event("hata").build());
                 });
 
         Flux<ServerSentEvent<String>> kaynakOlayi = Flux.defer(() -> {
@@ -271,7 +313,35 @@ public class ChatService {
             }
         });
 
-        return Flux.concat(conversationIdOlayi, tokenOlaylari, kaynakOlayi, bekleyenIslemOlayi, araclarOlayi, yapisalVeriOlayi)
+        // tokenOlaylari tamamen bitince (birikenMetin artik tam) calisir - ayni
+        // kaynakOlayi/araclarOlayi'nin dayandigi varsayimla (tool cagrilari
+        // metin akisindan once tamamlanir, bkz. yukaridaki yorumlar).
+        Flux<ServerSentEvent<String>> dogrulamaOlayi = Flux.defer(() -> {
+            List<Kaynak> kaynaklar = benzersiz(kaynakListesi);
+            if (kaynaklar.isEmpty() || birikenMetin.isEmpty()) {
+                return Flux.empty();
+            }
+            KaynakDogrulamaSonucu sonuc = kaynakDogrulamaService.dogrula(birikenMetin.toString(), hamMetinListesi);
+            if (sonuc == null) {
+                return Flux.empty();
+            }
+            try {
+                String json = objectMapper.writeValueAsString(sonuc);
+                return Flux.just(ServerSentEvent.builder(json).event("dogrulama").build());
+            } catch (JsonProcessingException e) {
+                return Flux.empty();
+            }
+        });
+
+        return Flux.concat(
+                        conversationIdOlayi,
+                        algilananModOlayi,
+                        tokenOlaylari,
+                        kaynakOlayi,
+                        dogrulamaOlayi,
+                        bekleyenIslemOlayi,
+                        araclarOlayi,
+                        yapisalVeriOlayi)
                 .doFinally(sinyal -> {
                     llmSinirlayici.izinBirak();
                     List<String> araclar = benzersiz(kullanilanAraclar);
@@ -298,6 +368,45 @@ public class ChatService {
                 });
     }
 
+    // Google GenAI SDK'sinin bazen firlattigi genel "Failed to generate
+    // content" hatasi Spring AI'nin kendi retry mekanizmasi tarafindan
+    // YAKALANMAZ (bkz. SpringAiRetryAutoConfiguration - sadece
+    // TransientAiException/ResourceAccessException'i tekrar dener, bu duz
+    // bir RuntimeException). Toplu degerlendirme scripti (bkz.
+    // scripts/rag-degerlendirme.js) bunu 18 soruda 3 kez yakaladi - genelde
+    // gecici gorunuyor, bu yuzden burada kendi basit tekrar deneme
+    // mantigimizi ekliyoruz: bir kez basarisiz olursa kisa bir bekleme
+    // sonrasi TEKRAR dener, ikinci deneme de basarisiz olursa (mevcut
+    // davranis gibi) hatayi oldugu gibi yukari firlatir - GlobalExceptionHandler
+    // zaten bunu temiz bir "beklenmeyen hata" mesajina ceviriyor.
+    private static final int ANA_CAGRI_MAKS_DENEME = 2;
+    private static final long ANA_CAGRI_BEKLEME_MS = 1500;
+
+    private ChatClientResponse anaCagriYap(ChatClient.ChatClientRequestSpec istekSpec) {
+        RuntimeException sonHata = null;
+        for (int deneme = 1; deneme <= ANA_CAGRI_MAKS_DENEME; deneme++) {
+            try {
+                return llmSinirlayici.sinirliCagir(() -> istekSpec.call().chatClientResponse());
+            } catch (RuntimeException e) {
+                sonHata = e;
+                log.warn(
+                        "Ana sohbet cagrisi basarisiz (deneme {}/{}): {}",
+                        deneme,
+                        ANA_CAGRI_MAKS_DENEME,
+                        e.getMessage());
+                if (deneme < ANA_CAGRI_MAKS_DENEME) {
+                    try {
+                        Thread.sleep(ANA_CAGRI_BEKLEME_MS);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+        throw sonHata;
+    }
+
     private SohbetModu modCoz(SohbetModu istekteki) {
         return istekteki == null ? SohbetModu.GENEL : istekteki;
     }
@@ -309,13 +418,42 @@ public class ChatService {
         return sohbetService.sohbetBaslat(personelId, mod).getId();
     }
 
-    private String sistemPromptuOverride(SohbetModu mod) {
-        return switch (mod) {
-            case GENEL -> null;
+    private static final String RAG_KAPALI_KURALI = "\n\nEK KURAL: Kullanıcı bu mesaj için mevzuat arama "
+            + "aracını (belgeAra) kapattı - bu aracı KULLANMA, sadece genel bilginle (belirterek) cevap ver.";
+    private static final String TALEP_KAPALI_KURALI = "\n\nEK KURAL: Kullanıcı bu mesaj için talep araçlarını "
+            + "(talepleriGetir, talebiMudurlugeAta, talepDurumGuncelle, talepOncelikGuncelle, talebeNotEkle) "
+            + "kapattı - bunları KULLANMA.";
+    private static final String KURUM_DIZIN_KAPALI_KURALI = "\n\nEK KURAL: Kullanıcı bu mesaj için kurum dizini "
+            + "araçlarını (mudurlukIletisimGetir, personelAra) kapattı - bunları KULLANMA.";
+
+    // "Araçlar" panelinden gelen kapaliAraclar, mod bazli sistem promptuna EK
+    // kural olarak eklenir - ayni TALEP/IMAR/RUHSAT modlarinin belgeAra/talep
+    // araclarini kisitlamasiyla ayni, kanitlanmis mekanizma (prompt tabanli,
+    // sert bir tool-kaldirma degil). kapaliAraclar bossa mevcut davranis
+    // (GENEL'de override yok, digerlerinde kendi mod promptu) aynen korunur.
+    private String sistemPromptuOlustur(SohbetModu mod, Set<AracGrubu> kapaliAraclar) {
+        String temelPrompt = switch (mod) {
+            case GENEL -> ChatClientConfig.SISTEM_PROMPT;
             case TALEP -> ChatClientConfig.TALEP_MODU_SISTEM_PROMPTU;
             case IMAR -> ChatClientConfig.IMAR_MODU_SISTEM_PROMPTU;
             case RUHSAT -> ChatClientConfig.RUHSAT_MODU_SISTEM_PROMPTU;
+            case OTOMATIK -> throw new IllegalStateException(
+                    "OTOMATIK modu bir gercek moda cozulmeden buraya ulasmamali.");
         };
+        if (kapaliAraclar == null || kapaliAraclar.isEmpty()) {
+            return mod == SohbetModu.GENEL ? null : temelPrompt;
+        }
+        StringBuilder prompt = new StringBuilder(temelPrompt);
+        if (kapaliAraclar.contains(AracGrubu.RAG)) {
+            prompt.append(RAG_KAPALI_KURALI);
+        }
+        if (kapaliAraclar.contains(AracGrubu.TALEP)) {
+            prompt.append(TALEP_KAPALI_KURALI);
+        }
+        if (kapaliAraclar.contains(AracGrubu.KURUM_DIZIN)) {
+            prompt.append(KURUM_DIZIN_KAPALI_KURALI);
+        }
+        return prompt.toString();
     }
 
     private <T> List<T> bosMu(List<T> liste) {

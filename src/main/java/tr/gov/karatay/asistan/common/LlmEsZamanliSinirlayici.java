@@ -32,6 +32,8 @@ public class LlmEsZamanliSinirlayici {
         }
         try {
             return islem.get();
+        } catch (RuntimeException e) {
+            throw YapayZekaHataYorumlayici.yorumla(e);
         } finally {
             izinler.release();
         }

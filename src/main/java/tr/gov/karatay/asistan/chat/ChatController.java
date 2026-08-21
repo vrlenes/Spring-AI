@@ -1,6 +1,7 @@
 package tr.gov.karatay.asistan.chat;
 
 import java.util.List;
+import java.util.Set;
 
 import jakarta.validation.Valid;
 
@@ -20,10 +21,12 @@ import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
 import tr.gov.karatay.asistan.chat.dto.ChatRequest;
 import tr.gov.karatay.asistan.chat.dto.ChatResponse;
+import tr.gov.karatay.asistan.common.enums.AracGrubu;
 import tr.gov.karatay.asistan.common.enums.SohbetModu;
 import tr.gov.karatay.asistan.personel.PersonelDetails;
 import tr.gov.karatay.asistan.sohbet.SohbetService;
 import tr.gov.karatay.asistan.sohbet.dto.EkVerisi;
+import tr.gov.karatay.asistan.sohbet.dto.GeriBildirimIstegi;
 import tr.gov.karatay.asistan.sohbet.dto.SohbetMesajOzeti;
 import tr.gov.karatay.asistan.sohbet.dto.SohbetOzeti;
 
@@ -59,9 +62,10 @@ public class ChatController {
             @RequestParam(required = false) String conversationId,
             @RequestParam(required = false) String mesaj,
             @RequestParam(required = false) SohbetModu mod,
+            @RequestParam(required = false) Set<AracGrubu> kapaliAraclar,
             @RequestParam("dosya") MultipartFile dosya,
             @AuthenticationPrincipal PersonelDetails personel) {
-        ChatRequest istek = new ChatRequest(conversationId, mesaj == null ? "" : mesaj, mod);
+        ChatRequest istek = new ChatRequest(conversationId, mesaj == null ? "" : mesaj, mod, kapaliAraclar);
         return chatService.yanitla(istek, personel.getPersonel().getId(), dosya);
     }
 
@@ -73,10 +77,20 @@ public class ChatController {
             @RequestParam(required = false) String conversationId,
             @RequestParam(required = false) String mesaj,
             @RequestParam(required = false) SohbetModu mod,
+            @RequestParam(required = false) Set<AracGrubu> kapaliAraclar,
             @RequestParam("dosya") MultipartFile dosya,
             @AuthenticationPrincipal PersonelDetails personel) {
-        ChatRequest istek = new ChatRequest(conversationId, mesaj == null ? "" : mesaj, mod);
+        ChatRequest istek = new ChatRequest(conversationId, mesaj == null ? "" : mesaj, mod, kapaliAraclar);
         return chatService.akisliYanitla(istek, personel.getPersonel().getId(), dosya);
+    }
+
+    @PostMapping("/api/sohbetler/{sohbetId}/mesajlar/{mesajId}/geri-bildirim")
+    public SohbetMesajOzeti geriBildirimVer(
+            @PathVariable String sohbetId,
+            @PathVariable Long mesajId,
+            @RequestBody GeriBildirimIstegi istek,
+            @AuthenticationPrincipal PersonelDetails personel) {
+        return sohbetService.geriBildirimVer(sohbetId, mesajId, personel.getPersonel().getId(), istek.deger());
     }
 
     @GetMapping("/api/sohbetler/{sohbetId}/mesajlar/{mesajId}/ek")
