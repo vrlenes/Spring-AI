@@ -28,7 +28,12 @@ spring:
     # Chat: bulut (Google GenAI / Gemini, ucretsiz AI Studio kotasi). Embedding:
     # yerel Ollama (bge-m3) - RAG'de kullanilan pgvector koleksiyonu bu modelin
     # boyutuna (1024) gore olusturuldugu icin embedding tarafi degismedi, sadece
-    # chat saglayicisi degisti. Bu proje gercek vatandas verisi ISLEMIYOR (mock/
+    # chat saglayicisi degisti. Google'in bulut embedding API'sine (gemini-
+    # embedding-001) gecis denendi ama ucretsiz katmanin embedding icin hiz
+    # siniri cok dusuk (5 RPM) ve ucretli katmana gecis icin zorunlu minimum
+    # on odeme (~500 TL) bu projenin gercek ihtiyacina (bir kerelik ~285K
+    # token, birkaç sent) kiyasla orantisiz bulundu - bge-m3'e geri donuldu
+    # (bkz. git gecmisi). Bu proje gercek vatandas verisi ISLEMIYOR (mock/
     # staj verisi) - KVKK gerekcesiyle daha once Ollama'da kalinmisti (bkz. git
     # gecmisi), ama gercek kisisel veri olmadigi icin bulut sohbet modeline
     # gecmek burada bir sorun degil. Ayni gerekce gercek vatandas verisiyle
@@ -71,7 +76,16 @@ asistan:
     # (chunk-size + min-chunk-size-chars ile calisiyor), o yuzden dokumandaki
     # chunk-overlap ayari burada yer almiyor.
     chunk-size: 800
-    top-k: 5
+    # 5 idi: belge sayisi 5'ten 13'e cikinca canli testte bir sorun
+    # bulundu - konuyla ilgili birden fazla belge varsa (orn. "gurultu
+    # sikayetine zabita ne yapar" sorusu hem Gurultu Yonetmeligi hem Zabita
+    # Yonetmeligi hem Kabahatler Kanunu'nu ilgilendiriyor), tek bir belgenin
+    # 5 parcasi ust-k'nin TAMAMINI doldurup diger belgelerden hic kaynak
+    # gelmemesine yol acabiliyordu. 8'e cikarildi - LLM zaten belgeAra
+    # aracindan donen metni okuyup alakasizi kendisi eliyor (esik burada
+    # sadece gurultuyu elemek icin, bkz. asagidaki not), o yuzden daha
+    # fazla ham sonuc vermek risksiz.
+    top-k: 8
     # 0.65 idi: canli testte gercek/alakali chunk'larin skoru 0.54-0.67 araliginda
     # cikiyor (bge-m3 + Turkce mevzuat metni icin), yani eski esik gercek eslesmeleri
     # de eliyordu (RUHSAT modunda dogrulandi: esik 0'a cekilince 5 alakali chunk
@@ -82,8 +96,9 @@ asistan:
   chat:
     memory-window: 20
   llm:
-    # Yerel Ollama modeli tek bir GPU/CPU kaynagini paylasiyor - ayni anda
-    # islenebilecek LLM istegi sayisini sinirlar (bkz. LlmEsZamanliSinirlayici).
+    # Yerel Ollama modeli (embedding) tek bir GPU/CPU kaynagini paylasiyor -
+    # ayni anda islenebilecek LLM istegi sayisini sinirlar (bkz.
+    # LlmEsZamanliSinirlayici).
     es-zamanli-istek-siniri: 2
 
 management:
