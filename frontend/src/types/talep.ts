@@ -39,11 +39,18 @@ export interface Mudurluk {
   sorumlulukAlani: string | null
 }
 
+export interface GunlukSayim {
+  tarih: string
+  sayi: number
+}
+
 export interface TalepIstatistik {
   gunSayisi: number
   mudurlukAdi: string | null
   toplamTalep: number
   durumDagilimi: Record<string, number>
+  gunlukTrend: GunlukSayim[]
+  ortalamaCozumSuresiSaat: number | null
 }
 
 export interface SiniflandirmaOnerisi {
@@ -56,6 +63,12 @@ export interface TopluSiniflandirmaOnerisi {
   takipNo: string
   konuMetni: string
   oneri: SiniflandirmaOnerisi
+}
+
+export interface TopluIslemSonucu {
+  takipNo: string
+  basarili: boolean
+  hata: string | null
 }
 
 export interface ResmiYaziTaslagi {

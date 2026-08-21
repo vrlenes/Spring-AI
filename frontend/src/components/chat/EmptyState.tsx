@@ -1,4 +1,4 @@
-import { Building2, ClipboardList, FileCheck2, Sparkles, type LucideIcon } from 'lucide-react'
+import { Building2, ClipboardList, FileCheck2, Sparkles, Wand2, type LucideIcon } from 'lucide-react'
 import karatayLogo from '@/assets/karatay-logo.png'
 import { cn } from '@/lib/utils'
 import { useSohbetStore } from '@/stores/useSohbetStore'
@@ -26,6 +26,13 @@ const RUHSAT_ORNEKLERI = [
   'İşyeri açma ruhsatı için hangi belgeler gerekir?',
   'Sıhhi müessese ile gayrisıhhi müessese arasındaki fark nedir?',
   'Ruhsat başvurusu ne kadar sürede sonuçlanır?',
+]
+
+const OTOMATIK_ORNEKLERI = [
+  'Açık talepleri listele',
+  'Resmi yazışmalarda imza yetkisi kime aittir?',
+  'Yapı ruhsatı almak için hangi belgeler gereklidir?',
+  'İşyeri açma ruhsatı için hangi belgeler gerekir?',
 ]
 
 interface ModKart {
@@ -56,37 +63,78 @@ const MODLAR: ModKart[] = [
   },
 ]
 
+// OTOMATIK, diger 4 mod gibi kendi sabit sistem promptu/RAG kapsami olan
+// gercek bir mod DEGIL - her mesajda ModYonlendirmeService'in mesaji
+// GENEL/TALEP/IMAR/RUHSAT'tan birine yonlendirdigi bir meta-secim (bkz.
+// backend). Bu farki gorsel olarak da yansitmak icin ayri, tam genislikte
+// bir kart olarak digerlerinin USTUNE eklendi - mevcut 2x2 izgaraya
+// dokunulmadi, secim tamamen opsiyonel (varsayilan hala GENEL).
+function OtomatikKarti() {
+  const aktifMod = useSohbetStore((s) => s.aktifMod)
+  const modDegistir = useSohbetStore((s) => s.modDegistir)
+  const secili = aktifMod === 'OTOMATIK'
+
+  return (
+    <button
+      type="button"
+      onClick={() => modDegistir('OTOMATIK')}
+      className={cn(
+        'flex w-full max-w-md items-center gap-2.5 rounded-xl border p-3 text-left transition-colors',
+        secili ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50',
+      )}
+    >
+      <span
+        className={cn(
+          'flex size-7 shrink-0 items-center justify-center rounded-lg',
+          secili ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+        )}
+      >
+        <Wand2 className="size-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[12.5px] font-medium text-foreground">Otomatik</span>
+        <span className="block text-[11px] leading-snug text-muted-foreground">
+          Sorunuzu okuyup hangi asistana (Genel/Talep/İmar/Ruhsat) ait olduğuna kendisi karar verir.
+        </span>
+      </span>
+    </button>
+  )
+}
+
 function ModKartlari() {
   const aktifMod = useSohbetStore((s) => s.aktifMod)
   const modDegistir = useSohbetStore((s) => s.modDegistir)
 
   return (
-    <div className="grid w-full max-w-md grid-cols-2 gap-2.5">
-      {MODLAR.map(({ mod, baslik, aciklama, Icon }) => {
-        const secili = mod === aktifMod
-        return (
-          <button
-            key={mod}
-            type="button"
-            onClick={() => modDegistir(mod)}
-            className={cn(
-              'flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition-colors',
-              secili ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50',
-            )}
-          >
-            <span
+    <div className="flex w-full max-w-md flex-col gap-2.5">
+      <OtomatikKarti />
+      <div className="grid grid-cols-2 gap-2.5">
+        {MODLAR.map(({ mod, baslik, aciklama, Icon }) => {
+          const secili = mod === aktifMod
+          return (
+            <button
+              key={mod}
+              type="button"
+              onClick={() => modDegistir(mod)}
               className={cn(
-                'flex size-7 items-center justify-center rounded-lg',
-                secili ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                'flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition-colors',
+                secili ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50',
               )}
             >
-              <Icon className="size-4" />
-            </span>
-            <span className="text-[12.5px] font-medium text-foreground">{baslik}</span>
-            <span className="text-[11px] leading-snug text-muted-foreground">{aciklama}</span>
-          </button>
-        )
-      })}
+              <span
+                className={cn(
+                  'flex size-7 items-center justify-center rounded-lg',
+                  secili ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                )}
+              >
+                <Icon className="size-4" />
+              </span>
+              <span className="text-[12.5px] font-medium text-foreground">{baslik}</span>
+              <span className="text-[11px] leading-snug text-muted-foreground">{aciklama}</span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -128,6 +176,7 @@ const ORNEK_LISTELERI: Record<SohbetModu, string[]> = {
   TALEP: TALEP_ORNEKLERI,
   IMAR: IMAR_ORNEKLERI,
   RUHSAT: RUHSAT_ORNEKLERI,
+  OTOMATIK: OTOMATIK_ORNEKLERI,
 }
 
 export function EmptyState({ onSelect }: EmptyStateProps) {

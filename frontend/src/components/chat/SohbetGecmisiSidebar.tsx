@@ -8,7 +8,13 @@ import { useTemaStore } from '@/stores/useTemaStore'
 import { cn } from '@/lib/utils'
 import type { SohbetModu } from '@/types/chat'
 
-const MOD_ETIKETLERI: Record<SohbetModu, string> = { GENEL: 'Genel', TALEP: 'Talep', IMAR: 'İmar', RUHSAT: 'Ruhsat' }
+const MOD_ETIKETLERI: Record<SohbetModu, string> = {
+  GENEL: 'Genel',
+  TALEP: 'Talep',
+  IMAR: 'İmar',
+  RUHSAT: 'Ruhsat',
+  OTOMATIK: 'Otomatik',
+}
 
 export function SohbetGecmisiSidebar() {
   const { personel, cikisYap } = useAuthStore()

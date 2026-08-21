@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { ArrowUp, FileText, Paperclip, X } from 'lucide-react'
+import { ArrowUp, ClipboardList, Contact, FileSearch, FileText, Paperclip, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { talepleriGetir } from '@/lib/talepler'
 import { useSohbetStore } from '@/stores/useSohbetStore'
 import { cn } from '@/lib/utils'
+import type { AracGrubu } from '@/types/chat'
 import type { TalepOzeti } from '@/types/talep'
 
 const IZIN_VERILEN_EK_TURLERI = 'image/jpeg,image/png,image/webp,application/pdf'
+const ARAC_ETIKETLERI: Record<AracGrubu, { baslik: string; Icon: typeof FileSearch }> = {
+  RAG: { baslik: 'Mevzuat Arama', Icon: FileSearch },
+  TALEP: { baslik: 'Talep Araçları', Icon: ClipboardList },
+  KURUM_DIZIN: { baslik: 'Kurum Dizini', Icon: Contact },
+}
+const TUM_ARACLAR: AracGrubu[] = ['RAG', 'TALEP', 'KURUM_DIZIN']
 // Sunucudan bundan daha fazla oneri cekilir (TAKIP_NO_ONERI_TOPLAM), ama
 // ayni anda sadece bir "pencere" (TAKIP_NO_ONERI_GORUNUR kadar) gosterilir -
 // asagi tusuyla gezinirken pencere kaydirilir (ustteki kaybolur, alttan yeni
@@ -39,6 +46,8 @@ function mentionAra(metin: string, imlecKonumu: number): MentionDurumu | null {
 
 export function ChatComposer({ disabled, onSend }: ChatComposerProps) {
   const aktifMod = useSohbetStore((s) => s.aktifMod)
+  const kapaliAraclar = useSohbetStore((s) => s.kapaliAraclar)
+  const aracToggle = useSohbetStore((s) => s.aracToggle)
   const [deger, setDeger] = useState('')
   const [dosya, setDosya] = useState<File | null>(null)
   const [mention, setMention] = useState<MentionDurumu | null>(null)
@@ -180,6 +189,28 @@ export function ChatComposer({ disabled, onSend }: ChatComposerProps) {
           })}
         </div>
       )}
+      <div className="mb-1.5 flex flex-wrap gap-1.5">
+        {TUM_ARACLAR.filter((arac) => !kapaliAraclar.has(arac)).map((arac) => {
+          const { baslik, Icon } = ARAC_ETIKETLERI[arac]
+          return (
+            <span
+              key={arac}
+              className="flex items-center gap-1 rounded-full border bg-muted/40 py-1 pr-1 pl-2.5 text-[11.5px] text-muted-foreground"
+            >
+              <Icon className="size-3 shrink-0" />
+              {baslik}
+              <button
+                type="button"
+                onClick={() => aracToggle(arac)}
+                aria-label={`${baslik} aracını kapat`}
+                className="rounded-full p-0.5 hover:bg-muted hover:text-foreground"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )
+        })}
+      </div>
       {dosya && (
         <div className="mb-1.5 flex w-fit items-center gap-1.5 rounded-full border bg-muted/40 py-1 pr-1 pl-2.5 text-[12px]">
           <FileText className="size-3.5 shrink-0 text-muted-foreground" />

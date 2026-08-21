@@ -82,12 +82,47 @@ function TalepDetayKarti({ detay }: { detay: TalepDetay }) {
   )
 }
 
+export function GunlukTrendGrafigi({ trend }: { trend: TalepIstatistik['gunlukTrend'] }) {
+  if (trend.length === 0) return null
+  const maks = Math.max(1, ...trend.map((g) => g.sayi))
+  const TARIH_KISA = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit' })
+
+  return (
+    <div className="mt-2.5 border-t pt-2.5">
+      <p className="mb-1.5 text-[10.5px] font-medium tracking-wide text-muted-foreground uppercase">
+        Günlük Talep Trendi
+      </p>
+      <div className="flex h-14 items-end gap-[3px]">
+        {trend.map((g) => (
+          <div key={g.tarih} className="flex flex-1 flex-col items-center gap-1" title={`${g.tarih}: ${g.sayi} talep`}>
+            <div
+              className="w-full rounded-t bg-primary/60"
+              style={{ height: `${Math.max(2, (g.sayi / maks) * 100)}%` }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+        <span>{TARIH_KISA.format(new Date(trend[0].tarih))}</span>
+        <span>{TARIH_KISA.format(new Date(trend[trend.length - 1].tarih))}</span>
+      </div>
+    </div>
+  )
+}
+
 function IstatistikKarti({ istatistik }: { istatistik: TalepIstatistik }) {
   return (
     <div className="mt-2.5 max-w-md rounded-lg border p-3 text-[12px]">
       <p className="mb-2 text-[11px] text-muted-foreground">
         Son {istatistik.gunSayisi} gün{istatistik.mudurlukAdi ? ` · ${istatistik.mudurlukAdi}` : ''} · Toplam{' '}
         <span className="font-semibold text-foreground">{istatistik.toplamTalep}</span>
+        {istatistik.ortalamaCozumSuresiSaat != null && (
+          <>
+            {' '}
+            · Ort. çözüm süresi{' '}
+            <span className="font-semibold text-foreground">{istatistik.ortalamaCozumSuresiSaat.toFixed(1)} saat</span>
+          </>
+        )}
       </p>
       <div className="grid grid-cols-2 gap-1.5">
         {Object.entries(istatistik.durumDagilimi).map(([durum, sayi]) => (
@@ -97,6 +132,7 @@ function IstatistikKarti({ istatistik }: { istatistik: TalepIstatistik }) {
           </div>
         ))}
       </div>
+      <GunlukTrendGrafigi trend={istatistik.gunlukTrend} />
     </div>
   )
 }

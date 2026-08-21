@@ -6,6 +6,7 @@ import { MessageBubble } from '@/components/chat/MessageBubble'
 import { TypingDots } from '@/components/chat/TypingDots'
 import { EmptyState } from '@/components/chat/EmptyState'
 import { ChatComposer } from '@/components/chat/ChatComposer'
+import { ModSwitcher } from '@/components/chat/ModSwitcher'
 import { SohbetGecmisiSidebar } from '@/components/chat/SohbetGecmisiSidebar'
 import { SagPanel } from '@/components/layout/SagPanel'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -35,8 +36,9 @@ function AnaLayout() {
       <SohbetGecmisiSidebar />
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 items-center gap-3 border-b px-4 py-2.5 md:hidden">
-          <img src={karatayLogo} alt="Karatay Belediyesi" className="h-8 w-auto" />
+        <header className="flex shrink-0 items-center gap-3 border-b px-4 py-2.5">
+          <img src={karatayLogo} alt="Karatay Belediyesi" className="h-8 w-auto md:hidden" />
+          <ModSwitcher />
         </header>
 
         <div ref={viewportRef} className="min-h-0 flex-1 overflow-y-auto">

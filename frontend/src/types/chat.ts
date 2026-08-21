@@ -1,4 +1,16 @@
-export type SohbetModu = 'GENEL' | 'TALEP' | 'IMAR' | 'RUHSAT'
+export type SohbetModu = 'GENEL' | 'TALEP' | 'IMAR' | 'RUHSAT' | 'OTOMATIK'
+
+export type GeriBildirim = 'OLUMLU' | 'OLUMSUZ'
+
+export type AracGrubu = 'RAG' | 'TALEP' | 'KURUM_DIZIN'
+
+// SADECE RAG kaynagi kullanildiginda dolu - cevabin kaynaga sadik olup
+// olmadigina dair bagimsiz bir ikinci model kontrolunun sonucu (bkz. backend
+// KaynakDogrulamaService).
+export interface KaynakDogrulamaSonucu {
+  dogrulandi: boolean
+  not: string | null
+}
 
 export interface Kaynak {
   baslik: string
@@ -47,6 +59,20 @@ export interface ChatMessage {
   araclar?: string[]
   yapisalVeri?: YapisalVeriPaketi
   ek?: EkOnizleme
+  // Sadece sohbet OTOMATIK modundaysa dolu - ModYonlendirmeService'in bu
+  // mesaj icin sectigi gercek mod (bkz. backend ChatResponse.algilananMod).
+  algilananMod?: SohbetModu
+  // Backend'deki kalici sohbet_mesaji kaydinin id'si - gecmisten yuklenen
+  // mesajlarda hemen dolu, yeni akan bir mesajda ise akis bitip gecmis
+  // yeniden cekilene kadar bos kalir (bkz. useSohbetStore.mesajGonder).
+  // Geri bildirim butonlari bu alan olmadan calisamaz.
+  mesajId?: number
+  geriBildirim?: GeriBildirim
+  dogrulama?: KaynakDogrulamaSonucu
+  // Akis basladiktan (HTTP 200 sonrasi) bir hata olursa dolar - bkz. backend
+  // ChatService.akisliYanitla'daki "hata" SSE olayi. Mesaj icerigi bu ana
+  // kadar akan token'lari (varsa) korur, hata ayri bir alanda gosterilir.
+  hata?: string
 }
 
 export type ChatStreamEvent =
@@ -56,6 +82,9 @@ export type ChatStreamEvent =
   | { type: 'bekleyenIslem'; bekleyenIslem: BekleyenIslem }
   | { type: 'araclar'; araclar: string[] }
   | { type: 'yapisalVeri'; yapisalVeri: YapisalVeriPaketi }
+  | { type: 'algilananMod'; mod: SohbetModu }
+  | { type: 'dogrulama'; dogrulama: KaynakDogrulamaSonucu }
+  | { type: 'hata'; mesaj: string }
 
 export interface SohbetOzeti {
   id: string
@@ -74,5 +103,6 @@ export interface SohbetMesajOzeti {
   yapisalVeri: YapisalVeriPaketi | null
   ekMimeTipi: string | null
   ekDosyaAdi: string | null
+  geriBildirim: GeriBildirim | null
   olusturmaTarihi: string
 }

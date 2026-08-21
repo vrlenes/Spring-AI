@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { streamChat } from '@/lib/chatStream'
-import { sohbetleriGetir, sohbetMesajlariniGetir } from '@/lib/sohbetler'
-import type { ChatMessage, SohbetMesajOzeti, SohbetModu, SohbetOzeti } from '@/types/chat'
+import { geriBildirimVer as geriBildirimVerApi, sohbetleriGetir, sohbetMesajlariniGetir } from '@/lib/sohbetler'
+import type { AracGrubu, ChatMessage, GeriBildirim, SohbetMesajOzeti, SohbetModu, SohbetOzeti } from '@/types/chat'
 
 function mesajOzetindenChatMesaji(m: SohbetMesajOzeti, sohbetId: string): ChatMessage {
   return {
@@ -12,6 +12,8 @@ function mesajOzetindenChatMesaji(m: SohbetMesajOzeti, sohbetId: string): ChatMe
     araclar: m.araclar ?? undefined,
     bekleyenIslem: m.bekleyenIslem ?? undefined,
     yapisalVeri: m.yapisalVeri ?? undefined,
+    mesajId: m.id,
+    geriBildirim: m.geriBildirim ?? undefined,
     ek: m.ekMimeTipi
       ? {
           url: `/api/sohbetler/${sohbetId}/mesajlar/${m.id}/ek`,
@@ -30,12 +32,17 @@ interface SohbetStore {
   gonderiliyor: boolean
   streamingId: string | null
   gecmisYukleniyor: boolean
+  // "Araçlar" panelinden kapatilan tool gruplari - bkz. AracPaneli.tsx.
+  // Konusma bazli degil, oturum bazli tutulur (yeni konusmada sifirlanmaz).
+  kapaliAraclar: Set<AracGrubu>
 
   sohbetListesiniYukle: () => Promise<void>
   yeniKonusma: (mod?: SohbetModu) => void
   modDegistir: (mod: SohbetModu) => void
   sohbetSec: (id: string) => Promise<void>
   mesajGonder: (mesaj: string, dosya?: File) => Promise<void>
+  geriBildirimVer: (mesajId: number, deger: GeriBildirim | null) => Promise<void>
+  aracToggle: (arac: AracGrubu) => void
 }
 
 export const useSohbetStore = create<SohbetStore>((set, get) => ({
@@ -45,6 +52,7 @@ export const useSohbetStore = create<SohbetStore>((set, get) => ({
   mesajlar: [],
   gonderiliyor: false,
   streamingId: null,
+  kapaliAraclar: new Set(),
   gecmisYukleniyor: false,
 
   async sohbetListesiniYukle() {
@@ -60,14 +68,11 @@ export const useSohbetStore = create<SohbetStore>((set, get) => ({
   },
 
   modDegistir(mod) {
-    // Mod degistirmek, aktif konusmayi degistirmez - sadece bir SONRAKI yeni
-    // konusma bu modda baslar. Var olan bir konusmanin ortasinda mod
-    // degistirilemez (SohbetModu, konusma acilirken sabitleniyor - bkz. backend).
-    if (get().aktifSohbetId === null) {
-      set({ aktifMod: mod, mesajlar: [] })
-    } else {
-      set({ aktifMod: mod, aktifSohbetId: null, mesajlar: [] })
-    }
+    // Aktif konusma ortasinda da mod degistirilebilir - konusma KAPANMAZ,
+    // sadece bir sonraki mesaj yeni modla gider (backend her mesajda modu
+    // istekten okur, Sohbet.mod sadece gosterim/arama icin ayrica
+    // senkronize edilir, bkz. ChatService.modGuncelle).
+    set({ aktifMod: mod })
   },
 
   async sohbetSec(id) {
@@ -93,7 +98,7 @@ export const useSohbetStore = create<SohbetStore>((set, get) => ({
       ek: dosya ? { url: URL.createObjectURL(dosya), mimeTipi: dosya.type, dosyaAdi: dosya.name } : undefined,
     }
     const asistanId = crypto.randomUUID()
-    const { aktifSohbetId, aktifMod } = get()
+    const { aktifSohbetId, aktifMod, kapaliAraclar } = get()
 
     set((durum) => ({
       mesajlar: [...durum.mesajlar, kullaniciMesaji, { id: asistanId, role: 'asistan', content: '' }],
@@ -102,7 +107,9 @@ export const useSohbetStore = create<SohbetStore>((set, get) => ({
     }))
 
     try {
-      await streamChat({ conversationId: aktifSohbetId, mesaj, mod: aktifMod, dosya }, (olay) => {
+      await streamChat(
+        { conversationId: aktifSohbetId, mesaj, mod: aktifMod, kapaliAraclar: [...kapaliAraclar], dosya },
+        (olay) => {
         if (olay.type === 'conversationId') {
           set({ aktifSohbetId: olay.conversationId })
           return
@@ -135,10 +142,50 @@ export const useSohbetStore = create<SohbetStore>((set, get) => ({
           }))
           return
         }
+        if (olay.type === 'algilananMod') {
+          set((durum) => ({
+            mesajlar: durum.mesajlar.map((m) => (m.id === asistanId ? { ...m, algilananMod: olay.mod } : m)),
+          }))
+          return
+        }
+        if (olay.type === 'dogrulama') {
+          set((durum) => ({
+            mesajlar: durum.mesajlar.map((m) => (m.id === asistanId ? { ...m, dogrulama: olay.dogrulama } : m)),
+          }))
+          return
+        }
+        if (olay.type === 'hata') {
+          set((durum) => ({
+            mesajlar: durum.mesajlar.map((m) => (m.id === asistanId ? { ...m, hata: olay.mesaj } : m)),
+          }))
+          return
+        }
         set((durum) => ({
           mesajlar: durum.mesajlar.map((m) => (m.id === asistanId ? { ...m, content: m.content + olay.text } : m)),
         }))
       })
+
+      // Akis SSE ile mesajin kalici id'sini dondurmuyor (bkz. backend
+      // ChatService.akisliYanitla) - geri bildirim (begen/begenme)
+      // butonlarinin dogru mesaji hedefleyebilmesi icin akis bitince
+      // gecmisi tekrar cekip gercek id'yi eslestiriyoruz.
+      const guncelSohbetId = get().aktifSohbetId
+      if (guncelSohbetId) {
+        try {
+          const gecmis = await sohbetMesajlariniGetir(guncelSohbetId)
+          const sonAsistanMesaji = [...gecmis].reverse().find((m) => m.rol === 'ASISTAN')
+          if (sonAsistanMesaji) {
+            set((durum) => ({
+              mesajlar: durum.mesajlar.map((m) =>
+                m.id === asistanId ? { ...m, mesajId: sonAsistanMesaji.id } : m,
+              ),
+            }))
+          }
+        } catch {
+          // mesajId eslesmezse sadece geri bildirim butonlari calismaz,
+          // sohbetin kendisi etkilenmez - sessizce yut
+        }
+      }
     } catch {
       set((durum) => ({
         mesajlar: durum.mesajlar.map((m) =>
@@ -149,5 +196,37 @@ export const useSohbetStore = create<SohbetStore>((set, get) => ({
       set({ gonderiliyor: false, streamingId: null })
       get().sohbetListesiniYukle()
     }
+  },
+
+  async geriBildirimVer(mesajId, deger) {
+    const { aktifSohbetId, mesajlar } = get()
+    if (!aktifSohbetId) return
+    const oncekiDeger = mesajlar.find((m) => m.mesajId === mesajId)?.geriBildirim
+
+    // Iyimser (optimistic) guncelleme - kullanici tikladigi anda buton
+    // durumu degisir, istek basarisiz olursa asagida geri alinir.
+    set((durum) => ({
+      mesajlar: durum.mesajlar.map((m) => (m.mesajId === mesajId ? { ...m, geriBildirim: deger ?? undefined } : m)),
+    }))
+
+    try {
+      await geriBildirimVerApi(aktifSohbetId, mesajId, deger)
+    } catch {
+      set((durum) => ({
+        mesajlar: durum.mesajlar.map((m) => (m.mesajId === mesajId ? { ...m, geriBildirim: oncekiDeger } : m)),
+      }))
+    }
+  },
+
+  aracToggle(arac) {
+    set((durum) => {
+      const yeni = new Set(durum.kapaliAraclar)
+      if (yeni.has(arac)) {
+        yeni.delete(arac)
+      } else {
+        yeni.add(arac)
+      }
+      return { kapaliAraclar: yeni }
+    })
   },
 }))

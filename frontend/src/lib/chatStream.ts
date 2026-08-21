@@ -1,10 +1,11 @@
-import type { ChatStreamEvent, SohbetModu } from '@/types/chat'
+import type { AracGrubu, ChatStreamEvent, SohbetModu } from '@/types/chat'
 
-function dosyaliGovdeOlustur(istek: { conversationId: string | null; mesaj: string; mod: SohbetModu; dosya?: File }) {
+function dosyaliGovdeOlustur(istek: StreamChatRequest) {
   const form = new FormData()
   if (istek.conversationId) form.append('conversationId', istek.conversationId)
   form.append('mesaj', istek.mesaj)
   form.append('mod', istek.mod)
+  istek.kapaliAraclar?.forEach((arac) => form.append('kapaliAraclar', arac))
   if (istek.dosya) form.append('dosya', istek.dosya)
   return form
 }
@@ -13,6 +14,7 @@ interface StreamChatRequest {
   conversationId: string | null
   mesaj: string
   mod: SohbetModu
+  kapaliAraclar?: AracGrubu[]
   dosya?: File
 }
 
@@ -34,7 +36,12 @@ export async function streamChat(
     : await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: istek.conversationId, mesaj: istek.mesaj, mod: istek.mod }),
+        body: JSON.stringify({
+          conversationId: istek.conversationId,
+          mesaj: istek.mesaj,
+          mod: istek.mod,
+          kapaliAraclar: istek.kapaliAraclar,
+        }),
       })
 
   if (!yanit.ok || !yanit.body) {
@@ -95,6 +102,16 @@ export async function streamChat(
         } catch {
           // sunucudan bozuk JSON gelirse yapisal veriyi sessizce yok say
         }
+      } else if (olayAdi === 'algilananMod') {
+        onEvent({ type: 'algilananMod', mod: veri as SohbetModu })
+      } else if (olayAdi === 'dogrulama') {
+        try {
+          onEvent({ type: 'dogrulama', dogrulama: JSON.parse(veri) })
+        } catch {
+          // sunucudan bozuk JSON gelirse dogrulama rozetini sessizce yok say
+        }
+      } else if (olayAdi === 'hata') {
+        onEvent({ type: 'hata', mesaj: veri })
       }
     }
   }

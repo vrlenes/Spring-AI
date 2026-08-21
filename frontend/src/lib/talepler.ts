@@ -4,8 +4,10 @@ import type {
   SiniflandirmaOnerisi,
   TalepDetay,
   TalepDurumu,
+  TalepIstatistik,
   TalepOnceligi,
   TalepOzeti,
+  TopluIslemSonucu,
   TopluSiniflandirmaOnerisi,
 } from '@/types/talep'
 
@@ -84,6 +86,25 @@ export function talebeNotEkle(takipNo: string, notMetni: string, personel: strin
 
 export function talepKategoriGuncelle(takipNo: string, kategori: string): Promise<TalepDetay> {
   return yaz(`/api/talepler/${encodeURIComponent(takipNo)}/kategori`, { kategori })
+}
+
+export function talepleriTopluDurumGuncelle(takipNolar: string[], durum: TalepDurumu): Promise<TopluIslemSonucu[]> {
+  return yaz('/api/talepler/toplu/durum', { takipNolar, durum })
+}
+
+export function talepleriTopluMudurlugeAta(takipNolar: string[], mudurlukAdi: string): Promise<TopluIslemSonucu[]> {
+  return yaz('/api/talepler/toplu/mudurluk', { takipNolar, mudurlukAdi })
+}
+
+export async function talepIstatistikGetir(gunSayisi?: number, mudurluk?: string): Promise<TalepIstatistik> {
+  const params = new URLSearchParams()
+  if (gunSayisi) params.set('gunSayisi', String(gunSayisi))
+  if (mudurluk) params.set('mudurluk', mudurluk)
+  const yanit = await fetch(`/api/talepler/istatistik?${params.toString()}`)
+  if (!yanit.ok) {
+    throw new Error(`İstatistik getirilemedi (HTTP ${yanit.status})`)
+  }
+  return yanit.json()
 }
 
 export async function aiOnerisiGetir(takipNo: string): Promise<SiniflandirmaOnerisi> {
